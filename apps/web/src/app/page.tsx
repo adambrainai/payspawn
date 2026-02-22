@@ -443,11 +443,12 @@ export default function Home() {
       <footer className="py-12 px-4 md:px-8 border-t border-white/10">
         <div className="max-w-[1800px] mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
           <div className="text-xs tracking-[0.3em] uppercase text-white/40">PaySpawn © 2026</div>
-          <div className="flex gap-8 text-sm text-white/40">
+          <div className="flex flex-wrap gap-8 text-sm text-white/40">
             <Link href="/docs" className="hover:text-white transition-colors">Docs</Link>
             <Link href="/why" className="hover:text-white transition-colors">Why</Link>
             <a href="https://github.com/adambrainai/payspawn" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">GitHub</a>
             <a href="https://basescan.org/address/0x71FF87e48b3A66549FbC6A30214b11C4b4975bda" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">Contract</a>
+            <a href="https://bankr.bot/launches/0x06400D9877A9b2ba76CE40bC746A44C162e9cBa3" target="_blank" rel="noopener noreferrer" className="hover:text-[#F65B1A] transition-colors">$PAYSPAWN</a>
           </div>
         </div>
       </footer>
