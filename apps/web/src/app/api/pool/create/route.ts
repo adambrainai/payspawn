@@ -115,8 +115,9 @@ export async function POST(req: NextRequest) {
         if (log.address.toLowerCase() === FACTORY_ADDRESS.toLowerCase()) {
           // PoolCreated(address indexed pool, address indexed owner, uint256, bool)
           // pool is topics[1], owner is topics[2]
-          if (log.topics.length >= 3) {
-            poolAddress = ("0x" + log.topics[1].slice(26)) as `0x${string}`;
+          const poolTopic = log.topics[1];
+          if (log.topics.length >= 3 && poolTopic) {
+            poolAddress = ("0x" + poolTopic.slice(26)) as `0x${string}`;
             break;
           }
         }
@@ -158,8 +159,9 @@ export async function POST(req: NextRequest) {
       // Parse pool address from PoolCreated event
       let parsedPoolAddress = result as `0x${string}`;
       for (const log of receipt.logs) {
-        if (log.address.toLowerCase() === FACTORY_ADDRESS.toLowerCase() && log.topics.length >= 3) {
-          parsedPoolAddress = ("0x" + log.topics[1].slice(26)) as `0x${string}`;
+        const poolTopic = log.topics[1];
+        if (log.address.toLowerCase() === FACTORY_ADDRESS.toLowerCase() && log.topics.length >= 3 && poolTopic) {
+          parsedPoolAddress = ("0x" + poolTopic.slice(26)) as `0x${string}`;
           break;
         }
       }
