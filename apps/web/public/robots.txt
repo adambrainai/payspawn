@@ -1,0 +1,6 @@
+# PaySpawn robots.txt
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://payspawn.ai/sitemap.xml

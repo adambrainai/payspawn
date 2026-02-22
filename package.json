@@ -1,0 +1,25 @@
+{
+  "name": "payspawn",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Agent payments in one line",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/payspawn/payspawn"
+  },
+  "workspaces": [
+    "apps/*",
+    "sdk/*",
+    "contracts"
+  ],
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "test": "turbo test",
+    "lint": "turbo lint"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0",
+    "typescript": "^5.4.0"
+  }
+}
