@@ -177,12 +177,13 @@ export async function POST(request: NextRequest) {
     });
 
     if (isEOA) {
-      // EOA path: check USDC allowance to V4 for "remaining"
+      // EOA path: check USDC allowance to the credential's spender (V5.1 or V4)
+      const spenderAddr = (permission.spender as `0x${string}`) || CONTRACTS.PAYSPAWN_SPENDER_V4;
       const usdcAllowance = await publicClient.readContract({
         address: CONTRACTS.USDC,
         abi: USDC_ABI,
         functionName: "allowance",
-        args: [permission.account as `0x${string}`, CONTRACTS.PAYSPAWN_SPENDER_V4],
+        args: [permission.account as `0x${string}`, spenderAddr],
       });
 
       const isActive = !isExpired && !notYetStarted;
@@ -203,9 +204,9 @@ export async function POST(request: NextRequest) {
         },
         limits: {
           dailyAllowance: formatUnits(allowance, 6),
-          usdcAllowanceToV4: formatUnits(usdcAllowance, 6),
-          remaining: formatUnits(usdcAllowance, 6), // Decreases with each payment
-          periodSpent: null, // EOA doesn't use SPM period tracking
+          usdcAllowance: formatUnits(usdcAllowance, 6),
+          remaining: formatUnits(usdcAllowance, 6),
+          periodSpent: null,
           periodStart: null,
           periodEnd: null,
         },
