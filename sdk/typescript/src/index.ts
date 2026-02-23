@@ -61,6 +61,36 @@ export interface PaymentResult {
   total: number;
   blockNumber: string;
   explorer: string;
+  memo?: string;
+  credentialVersion?: "v4" | "v5";
+  receipt?: PaySpawnReceipt;
+}
+
+export interface PaySpawnReceipt {
+  txHash:    string;
+  from:      string;
+  to:        string;
+  amount:    number;
+  memo:      string;
+  timestamp: number;
+  version:   string;
+  signature: string;
+}
+
+export interface AgentPayResult extends PaymentResult {
+  memo:    string;
+  receipt: PaySpawnReceipt;
+}
+
+/** True if the credential uses PermissionV5 (has any V5-only fields). */
+export function isV5Credential(credential: Credential): boolean {
+  const p = credential.permission as any;
+  return (
+    p.maxPerTx     !== undefined ||
+    p.allowedTo    !== undefined ||
+    p.maxTxPerHour !== undefined ||
+    p.parentHash   !== undefined
+  );
 }
 
 export interface FetchResult {
@@ -173,6 +203,26 @@ export class PaySpawn {
   readonly pool: PaySpawnPool;
 
   /**
+   * Agent-to-agent payment and credential control (V5).
+   *
+   * @example
+   * ```typescript
+   * // Pay with a memo for receipt matching
+   * const result = await ps.agent.pay('aave-agent.pay', 0.01, {
+   *   memo: 'query:best-usdc-yield',
+   *   webhookUrl: 'https://my-agent.example.com/webhook',
+   * });
+   *
+   * // Pause this credential (V5 only)
+   * await ps.agent.pause();
+   *
+   * // Verify a receipt from another agent
+   * const { valid } = await ps.agent.verifyReceipt(receipt);
+   * ```
+   */
+  readonly agent: PaySpawnAgent;
+
+  /**
    * Create a PaySpawn client.
    * 
    * @param credential - Your PaySpawn credential (base64 string from dashboard)
@@ -190,6 +240,13 @@ export class PaySpawn {
 
     // Pool namespace
     this.pool = new PaySpawnPool(
+      this.credentialString,
+      this.credential,
+      this.baseUrl
+    );
+
+    // Agent namespace (V5 controls + agent-to-agent payments)
+    this.agent = new PaySpawnAgent(
       this.credentialString,
       this.credential,
       this.baseUrl
@@ -670,6 +727,132 @@ export class PaySpawnPool {
     const result = await response.json() as FleetProvisionResult & { error?: string };
     if (!response.ok) throw new Error(result.error || 'Fleet provisioning failed');
     return result;
+  }
+}
+
+// ============ Agent Namespace (V5) ============
+
+/**
+ * Agent-to-agent payment controls and V5 credential management.
+ * Accessed via `ps.agent.*`.
+ */
+export class PaySpawnAgent {
+  constructor(
+    private credentialString: string,
+    private credential: Credential,
+    private baseUrl: string
+  ) {}
+
+  /**
+   * Pay another agent with an optional memo for receipt matching.
+   *
+   * @param to          Recipient address, ENS, or .pay name
+   * @param amount      Amount in USD
+   * @param opts.memo   Arbitrary reference string (max 32 chars) for invoice matching
+   * @param opts.webhookUrl  If set, PaySpawn POSTs a signed receipt here after success
+   *
+   * @example
+   * ```typescript
+   * const result = await ps.agent.pay('aave-agent.pay', 0.01, {
+   *   memo: 'query:best-yield',
+   *   webhookUrl: 'https://my-agent.example.com/webhook',
+   * });
+   * console.log(result.receipt.signature); // verify on receiver side
+   * ```
+   */
+  async pay(
+    to: string,
+    amount: number,
+    opts?: { memo?: string; webhookUrl?: string }
+  ): Promise<AgentPayResult> {
+    if (!to)        throw new Error('Recipient (to) is required');
+    if (amount <= 0) throw new Error('Amount must be greater than 0');
+
+    const response = await fetch(`${this.baseUrl}/api/pay`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        credential: this.credentialString,
+        to,
+        amount,
+        memo:       opts?.memo,
+        webhookUrl: opts?.webhookUrl,
+      }),
+    });
+
+    const result = await response.json() as AgentPayResult & { error?: string };
+    if (!response.ok) throw new Error(result.error || `Payment failed with status ${response.status}`);
+    return result;
+  }
+
+  /**
+   * Pause this credential on-chain. All payments will be rejected until unpaused.
+   * V5 credentials only.
+   */
+  async pause(): Promise<{ success: boolean; credentialHash: string; txHash: string }> {
+    if (!isV5Credential(this.credential)) {
+      throw new Error('pause() requires a V5 credential. Upgrade your credential in the dashboard.');
+    }
+
+    const response = await fetch(`${this.baseUrl}/api/pay/pause`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ credential: this.credentialString, action: 'pause' }),
+    });
+
+    const result = await response.json() as { success: boolean; credentialHash: string; txHash: string; error?: string };
+    if (!response.ok) throw new Error(result.error || 'Pause failed');
+    return result;
+  }
+
+  /**
+   * Unpause a previously paused V5 credential.
+   */
+  async unpause(): Promise<{ success: boolean; credentialHash: string; txHash: string }> {
+    if (!isV5Credential(this.credential)) {
+      throw new Error('unpause() requires a V5 credential.');
+    }
+
+    const response = await fetch(`${this.baseUrl}/api/pay/pause`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ credential: this.credentialString, action: 'unpause' }),
+    });
+
+    const result = await response.json() as { success: boolean; credentialHash: string; txHash: string; error?: string };
+    if (!response.ok) throw new Error(result.error || 'Unpause failed');
+    return result;
+  }
+
+  /**
+   * Verify a payment receipt — confirms a payment actually happened and wasn't tampered with.
+   * Use on the receiving side to verify you were paid before executing a task.
+   *
+   * @example
+   * ```typescript
+   * // Receiving agent: verify before fulfilling request
+   * const { valid } = await ps.agent.verifyReceipt(receiptFromCaller);
+   * if (!valid) throw new Error('Payment not verified');
+   * // ... fulfill the request
+   * ```
+   */
+  async verifyReceipt(receipt: PaySpawnReceipt): Promise<{ valid: boolean; reason?: string }> {
+    const response = await fetch(`${this.baseUrl}/api/receipt/verify`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ receipt }),
+    });
+
+    const result = await response.json() as { valid: boolean; reason?: string; error?: string };
+    if (!response.ok) throw new Error(result.error || 'Verification failed');
+    return { valid: result.valid, reason: result.reason };
+  }
+
+  /**
+   * Whether this credential is a V5 credential (supports pause, whitelist, per-tx limits).
+   */
+  get isV5(): boolean {
+    return isV5Credential(this.credential);
   }
 }
 
