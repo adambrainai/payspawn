@@ -254,12 +254,15 @@ balance = ps.balance()  # "142.50"`} />
   "signature": "EOA",       // "EOA" for standard wallets, "0x..." for Smart Wallets
   "permission": {
     "account": "0x...",     // Your wallet address
-    "spender": "0x71FF...", // PaySpawnSpenderV4 contract
+    "spender": "0xaa8e...", // PaySpawnSpenderV5.3 contract
     "token": "0x8335...",   // USDC on Base
     "allowance": "100000000", // 100 USDC (6 decimals)
     "period": 86400,        // 24 hours
     "start": 1706400000,    // When it starts
-    "end": 1737936000       // When it expires
+    "end": 1737936000,      // When it expires
+    "maxPerTx": "0",        // Per-tx cap (0 = unlimited)
+    "allowedTo": [],        // Recipient whitelist (empty = any)
+    "maxTxPerHour": 0       // Velocity limit (0 = unlimited)
   }
 }`} />
                 </div>
@@ -402,14 +405,14 @@ const data = await ps.fetch("https://api.example.com/premium-data")
             
             <div className="border border-white/10 divide-y divide-white/10 font-mono text-sm">
               <div className="flex flex-col sm:flex-row sm:justify-between p-4 gap-2">
-                <span className="text-white/70">PaySpawnSpenderV4</span>
+                <span className="text-white/70">PaySpawnSpenderV5.3</span>
                 <a 
-                  href="https://basescan.org/address/0x71FF87e48b3A66549FbC6A30214b11C4b4975bda" 
+                  href="https://basescan.org/address/0xaa8e6815b0E8a3006DEe0c3171Cf9CA165fd862e" 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="text-[#F65B1A] hover:underline break-all"
                 >
-                  0x71FF...5bda
+                  0xaa8e...d862e
                 </a>
               </div>
               <div className="flex flex-col sm:flex-row sm:justify-between p-4 gap-2">

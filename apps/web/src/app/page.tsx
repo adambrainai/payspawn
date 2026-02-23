@@ -451,7 +451,9 @@ export default function Home() {
             <Link href="/docs" className="hover:text-white transition-colors">Docs</Link>
             <Link href="/why" className="hover:text-white transition-colors">Why</Link>
             <a href="https://github.com/adambrainai/payspawn" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">GitHub</a>
-            <a href="https://basescan.org/address/0x71FF87e48b3A66549FbC6A30214b11C4b4975bda" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">Contract</a>
+            <a href="https://www.npmjs.com/package/@payspawn/sdk" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">npm</a>
+            <a href="https://basescan.org/address/0xaa8e6815b0E8a3006DEe0c3171Cf9CA165fd862e" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">Contract</a>
+            <a href="https://x.com/payspawn" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">X</a>
             <a href="https://bankr.bot/launches/0x06400D9877A9b2ba76CE40bC746A44C162e9cBa3" target="_blank" rel="noopener noreferrer" className="hover:text-[#F65B1A] transition-colors">$PAYSPAWN</a>
           </div>
         </div>
