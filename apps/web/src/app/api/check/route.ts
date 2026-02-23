@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { formatUnits } from "viem";
+import { formatUnits, parseUnits } from "viem";
 import { publicClient } from "@/lib/rpc";
 
 // ============ Contract Addresses (Base Mainnet) ============
@@ -176,8 +176,23 @@ export async function POST(request: NextRequest) {
       args: [permission.account as `0x${string}`],
     });
 
+    // Fetch protocol fee from the credential's spender contract
+    let txFeeUSDC = "0";
+    try {
+      const V5_ADDR = (process.env.PAYSPAWN_SPENDER_V5 || "").trim() as `0x${string}`;
+      const feeAbi = [{ type: "function", name: "calculateFee", inputs: [{ name: "amount", type: "uint256" }], outputs: [{ type: "uint256" }], stateMutability: "view" }] as const;
+      const sampleAmount = parseUnits("1", 6); // fee for $1 payment
+      const feeResult = await publicClient.readContract({
+        address: V5_ADDR,
+        abi: feeAbi,
+        functionName: "calculateFee",
+        args: [sampleAmount],
+      });
+      txFeeUSDC = formatUnits(feeResult as bigint, 6);
+    } catch { /* non-critical */ }
+
     if (isEOA) {
-      // EOA path: check USDC allowance to the credential's spender (V5.1 or V4)
+      // EOA path: check USDC allowance to the credential's spender (V5.1/V5.3 or V4)
       const spenderAddr = (permission.spender as `0x${string}`) || CONTRACTS.PAYSPAWN_SPENDER_V4;
       const usdcAllowance = await publicClient.readContract({
         address: CONTRACTS.USDC,
@@ -216,6 +231,7 @@ export async function POST(request: NextRequest) {
           periodSeconds: permission.period,
         },
         canSpend: isActive && usdcAllowance > BigInt(0) && balance > BigInt(0),
+        fee: { perTx: txFeeUSDC, currency: "USDC", note: "additive — recipient receives full amount" },
         contracts: {
           paySpawnSpenderV4: CONTRACTS.PAYSPAWN_SPENDER_V4,
         },
@@ -292,6 +308,7 @@ export async function POST(request: NextRequest) {
           periodSeconds: permission.period,
         },
         canSpend: status === "active" || status === "pending",
+        fee: { perTx: txFeeUSDC, currency: "USDC", note: "additive — recipient receives full amount" },
         contracts: {
           paySpawnSpenderV4: CONTRACTS.PAYSPAWN_SPENDER_V4,
           spendPermissionManager: CONTRACTS.SPEND_PERMISSION_MANAGER,

@@ -266,7 +266,7 @@ export default function WhyPage() {
             </p>
 
             <p className="text-white/70 font-light leading-relaxed">
-              Non-custodial. Fleet-ready. x402 native. Free to use. Built on Base.
+              Non-custodial. Fleet-ready. x402 native. $0.005 per transaction. Built on Base.
             </p>
 
             <p className="text-white/70 font-light leading-relaxed">
@@ -283,7 +283,7 @@ export default function WhyPage() {
             </p>
 
             <p className="text-white/70 font-light leading-relaxed">
-              PaySpawn&apos;s relayer covers gas on behalf of every agent. Your agents only need USDC. We handle the blockchain transaction with zero protocol fees, settling on Base in ~2 seconds.
+              PaySpawn&apos;s relayer covers gas on behalf of every agent. Your agents only need USDC. We handle the blockchain transaction with $0.005 per transaction, settling on Base in ~2 seconds.
             </p>
 
             <p className="text-white/70 font-light leading-relaxed">
@@ -307,7 +307,7 @@ export default function WhyPage() {
                 </Link>
               </div>
               <p className="mt-8 text-white/30 text-sm font-light">
-                Built on Base. Verified contracts. Open source. Any wallet. Zero fees.
+                Built on Base. Verified contracts. Open source. Any wallet. $0.005/tx.
               </p>
             </div>
           </div>

@@ -724,7 +724,7 @@ const PAYMENT_SENT_EVENT = parseAbiItem(
 );
 
 const PAYMENT_EXECUTED_V5_EVENT = parseAbiItem(
-  "event PaymentExecutedV5(bytes32 indexed credentialHash, address indexed from, address indexed to, uint256 amount, bytes32 memo, uint256 dailyRemaining, uint256 hourlyTxRemaining)"
+  "event PaymentExecutedV5(bytes32 indexed credentialHash, address indexed from, address indexed to, uint256 amount, uint256 fee, bytes32 memo, uint256 dailyRemaining)"
 );
 
 function TxHistory({ address }: { address: `0x${string}` }) {

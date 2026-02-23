@@ -159,7 +159,7 @@ export default function Home() {
             </div>
             <div className="bg-black px-8 py-8 border-t border-white/10">
               <p className="text-white font-light mb-2">Agent only needs USDC</p>
-              <p className="text-white/40 text-sm font-light">Our relayer covers gas. One token, zero headaches. Zero protocol fees.</p>
+              <p className="text-white/40 text-sm font-light">Our relayer covers gas. One token, zero headaches. $0.005 per transaction.</p>
             </div>
 
             {/* Row 6 */}
@@ -274,7 +274,7 @@ export default function Home() {
                   "Pay wallets, .pay names, or x402 APIs",
                   "Limits enforced by smart contract",
                   "Instant kill switch — revoke any agent",
-                  "Zero protocol fees",
+                  "$0.005 per transaction",
                 ].map(f => (
                   <div key={f} className="flex items-center gap-4">
                     <div className="w-1 h-1 bg-[#F65B1A] shrink-0" />
@@ -387,7 +387,7 @@ export default function Home() {
             </div>
             <div className="border border-white/10 p-6">
               <div className="text-[#F65B1A] text-xs tracking-[0.2em] uppercase mb-3">Free to Use</div>
-              <p className="text-white/50 text-sm font-light">Zero protocol fees. No monthly costs. Agents just need USDC.</p>
+              <p className="text-white/50 text-sm font-light">$0.005 per transaction. No monthly costs. Agents just need USDC.</p>
             </div>
           </div>
         </div>
@@ -399,14 +399,14 @@ export default function Home() {
           <div className="grid md:grid-cols-2 gap-16 items-center">
             <div>
               <span className="text-[#F65B1A] text-xs tracking-[0.3em] uppercase">Pricing</span>
-              <h2 className="mt-4 text-4xl md:text-5xl font-extralight font-[family-name:var(--font-exo2)]">Free</h2>
+              <h2 className="mt-4 text-4xl md:text-5xl font-extralight font-[family-name:var(--font-exo2)]">$0.005 / tx</h2>
               <p className="mt-6 text-white/40 font-light">
-                Zero protocol fees. No monthly costs.<br />
-                We cover gas — your agent just needs USDC.
+                Flat fee per transaction. No percentage. No monthly costs.<br />
+                Fee is additive — recipient gets the full amount. We cover gas.
               </p>
             </div>
             <div className="font-mono text-sm space-y-4">
-              {[["$0.10 payment", "$0.00 fee"], ["$1.00 payment", "$0.00 fee"], ["$10.00 payment", "$0.00 fee"], ["$100 payment", "$0.00 fee"], ["$1,000 payment", "$0.00 fee"]].map(([amount, fee]) => (
+              {[["$0.10 payment", "$0.005 fee"], ["$1.00 payment", "$0.005 fee"], ["$10.00 payment", "$0.005 fee"], ["$100 payment", "$0.005 fee"], ["$1,000 payment", "$0.005 fee"]].map(([amount, fee]) => (
                 <div key={amount} className="flex justify-between py-3 border-b border-white/10">
                   <span className="text-white/40">{amount}</span>
                   <span className="text-[#F65B1A]">{fee}</span>
@@ -426,7 +426,7 @@ export default function Home() {
             <span className="text-[#F65B1A]">Give them spending power.</span>
           </h2>
           <p className="text-white/40 font-light mb-10 max-w-lg mx-auto">
-            One wallet. Unlimited agents. x402 native. Free forever.
+            One wallet. Unlimited agents. x402 native. $0.005 flat per tx.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="/dashboard" className="inline-block bg-[#F65B1A] text-black px-12 py-5 text-sm tracking-wider uppercase hover:bg-[#ff7a3d] transition-colors">

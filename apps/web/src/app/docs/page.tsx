@@ -336,31 +336,31 @@ const data = await ps.fetch("https://api.example.com/premium-data")
             <h2 className="text-xs tracking-[0.3em] uppercase text-[#F65B1A] mb-8">Fees</h2>
             
             <div className="mb-8">
-              <div className="text-6xl font-extralight font-[family-name:var(--font-exo2)] text-[#F65B1A]">Free</div>
-              <div className="text-white/40 font-light mt-2">Zero protocol fees. No monthly costs.</div>
+              <div className="text-6xl font-extralight font-[family-name:var(--font-exo2)] text-[#F65B1A]">$0.005</div>
+              <div className="text-white/40 font-light mt-2">Flat fee per transaction. No monthly costs. No percentage.</div>
             </div>
             
             <div className="border border-white/10 divide-y divide-white/10 font-mono text-sm">
               <div className="flex justify-between p-4">
                 <span className="text-white/40">$1 payment</span>
-                <span className="text-[#F65B1A]">$0.00 fee</span>
+                <span className="text-[#F65B1A]">$0.005 fee</span>
               </div>
               <div className="flex justify-between p-4">
                 <span className="text-white/40">$10 payment</span>
-                <span className="text-[#F65B1A]">$0.00 fee</span>
+                <span className="text-[#F65B1A]">$0.005 fee</span>
               </div>
               <div className="flex justify-between p-4">
                 <span className="text-white/40">$100 payment</span>
-                <span className="text-[#F65B1A]">$0.00 fee</span>
+                <span className="text-[#F65B1A]">$0.005 fee</span>
               </div>
               <div className="flex justify-between p-4">
                 <span className="text-white/40">$1,000 payment</span>
-                <span className="text-[#F65B1A]">$0.00 fee</span>
+                <span className="text-[#F65B1A]">$0.005 fee</span>
               </div>
             </div>
             
             <p className="mt-6 text-white/40 font-light text-sm">
-              We cover gas — your agent just needs USDC.
+              Fee is additive — recipient gets the full amount. We cover gas.
             </p>
           </section>
 
