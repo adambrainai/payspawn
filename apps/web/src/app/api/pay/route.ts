@@ -14,7 +14,7 @@ const CONTRACTS = {
 };
 
 const RELAYER_PRIVATE_KEY = process.env.RELAYER_PRIVATE_KEY;
-const RECEIPT_SIGNING_KEY = process.env.RECEIPT_SIGNING_KEY || "dev-signing-key-change-in-prod";
+const RECEIPT_SIGNING_KEY = process.env.RECEIPT_SIGNING_KEY;
 
 // V5 ABI — payEOAV5, batchPayEOAV5, pauseCredential, unpauseCredential
 const PAYSPAWN_V5_ABI = [
@@ -375,6 +375,22 @@ function buildSignedReceipt(opts: {
   return receipt;
 }
 
+/** Validate webhook URL — block SSRF vectors */
+function isValidWebhookUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:") return false;
+    const h = parsed.hostname.toLowerCase();
+    if (h === "localhost" || h === "127.0.0.1" || h === "0.0.0.0") return false;
+    if (h.startsWith("169.254.")) return false; // AWS/cloud metadata
+    if (h.startsWith("10."))      return false; // RFC-1918 private
+    if (h.startsWith("172.16.") || h.startsWith("172.31.")) return false;
+    if (h.startsWith("192.168.")) return false;
+    if (h.endsWith(".internal") || h.endsWith(".local")) return false;
+    return true;
+  } catch { return false; }
+}
+
 /** Fire a webhook (fire-and-forget — never throws) */
 async function fireWebhook(url: string, payload: object): Promise<void> {
   try {
@@ -390,6 +406,12 @@ async function fireWebhook(url: string, payload: object): Promise<void> {
 }
 
 export async function POST(request: NextRequest) {
+  if (!RECEIPT_SIGNING_KEY) {
+    return NextResponse.json(
+      { error: "Server configuration error. Contact support." },
+      { status: 503 }
+    );
+  }
   try {
     const body = await request.json();
     const { credential, to, amount, memo, webhookUrl } = body;
@@ -594,7 +616,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Fire webhook (fire-and-forget — doesn't block or fail the payment)
-    if (webhookUrl && typeof webhookUrl === "string") {
+    if (webhookUrl && typeof webhookUrl === "string" && isValidWebhookUrl(webhookUrl)) {
       fireWebhook(webhookUrl, { event: "payment.success", receipt: signedReceipt });
     }
 

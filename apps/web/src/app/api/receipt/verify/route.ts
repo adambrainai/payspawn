@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac } from "crypto";
 
-const RECEIPT_SIGNING_KEY =
-  process.env.RECEIPT_SIGNING_KEY || "dev-signing-key-change-in-prod";
+const RECEIPT_SIGNING_KEY = process.env.RECEIPT_SIGNING_KEY;
 
 export interface PaySpawnReceipt {
   txHash:    string;
@@ -46,6 +45,7 @@ function computeSignature(receipt: Omit<PaySpawnReceipt, "signature">): string {
  *   { valid: false, receipt: { ... }, reason: "..." }  — tampered or invalid
  */
 export async function GET(request: NextRequest) {
+  if (!RECEIPT_SIGNING_KEY) return NextResponse.json({ error: "Server configuration error" }, { status: 503 });
   try {
     const { searchParams } = new URL(request.url);
     const receiptParam = searchParams.get("receipt");
@@ -123,6 +123,7 @@ export async function GET(request: NextRequest) {
  * Preferred for agent-to-agent use (no URL encoding issues with large receipts).
  */
 export async function POST(request: NextRequest) {
+  if (!RECEIPT_SIGNING_KEY) return NextResponse.json({ error: "Server configuration error" }, { status: 503 });
   try {
     const body = await request.json();
     const { receipt } = body;

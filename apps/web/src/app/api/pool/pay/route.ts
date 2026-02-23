@@ -146,7 +146,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: reason, canSpend: false }, { status: 400 });
     }
 
-    // Execute payment via pool contract
+    // Execute payment via pool contract (V3: direct USDC.safeTransfer, no V4 dependency)
     const relayerAccount = privateKeyToAccount(RELAYER_PRIVATE_KEY);
     const walletClient = createWalletClient({
       account: relayerAccount,
