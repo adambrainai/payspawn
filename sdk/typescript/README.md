@@ -46,6 +46,8 @@ const remaining = await ps.remaining();
 PAYSPAWN_CREDENTIAL=eyJzaWduYXR1cmUiOiJFT0EiLCJwZXJtaXNzaW9uIjp7...}
 ```
 
+> ⚠️ **Security:** Treat your credential like a private key. Anyone with the string can spend up to your daily limit. Never log it, paste it in bug reports, or commit it to version control. Store only in environment variables or a secrets manager.
+
 ## Why PaySpawn
 
 **The problem:** AI agents need wallets. If an agent holds a private key, one prompt injection or leaked env var drains everything — no limits, no stops.

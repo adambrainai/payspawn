@@ -73,8 +73,9 @@ contract PaySpawnBudgetPoolV3 {
     // ── Funding ──────────────────────────────────────────────
 
     /**
-     * @notice Deposit USDC into the pool and authorize V4 to spend it.
+     * @notice Deposit USDC into the pool.
      * @dev Owner must have approved this contract to spend their USDC first.
+     *      V3 holds funds directly and pays recipients via safeTransfer — no V4 dependency.
      */
     function deposit(uint256 amount) external onlyOwner {
         if (amount == 0) revert ZeroAmount();

@@ -1,6 +1,6 @@
 {
   "name": "@payspawn/sdk",
-  "version": "5.3.0",
+  "version": "5.3.1",
   "description": "Financial infrastructure for AI agents. Wallet delegation, x402 payments, on-chain spending limits, agent-to-agent payments with signed receipts. V5.3 on Base.",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
