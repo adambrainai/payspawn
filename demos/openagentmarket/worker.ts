@@ -12,12 +12,14 @@ import * as fs from 'node:fs';
 const PAYSPAWN_API = process.env.PAYSPAWN_API || "https://payspawn.ai/api";
 const WORKER_PRICE = 0.005; // $0.005 per query
 
-async function verifyPaySpawnReceipt(receipt: string): Promise<{ valid: boolean; txHash?: string }> {
+async function verifyPaySpawnReceipt(receipt: any): Promise<{ valid: boolean; txHash?: string }> {
   try {
+    // receipt may arrive as object or JSON string — normalize to object
+    const receiptObj = typeof receipt === "string" ? JSON.parse(receipt) : receipt;
     const res = await fetch(`${PAYSPAWN_API}/receipt/verify`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ receipt }),
+      body: JSON.stringify({ receipt: receiptObj }),  // POST expects { receipt: object }
     });
     const data: any = await res.json();
     return { valid: data.valid === true, txHash: data.receipt?.txHash };

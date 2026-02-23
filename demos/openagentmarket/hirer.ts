@@ -39,7 +39,7 @@ async function payWithPaySpawn(
 
   return {
     txHash: data.txHash,
-    receipt: JSON.stringify(data.receipt || {}),
+    receipt: data.receipt,   // keep as object — POST /api/receipt/verify expects { receipt: object }
     fee: data.fee || 0,
   };
 }
