@@ -101,6 +101,7 @@ interface TxEvent {
   fee: bigint;
   blockNumber: bigint;
   timestamp?: number;
+  version?: string;
 }
 
 // ─── EIP-712 ─────────────────────────────────────────────────────────────────
@@ -467,10 +468,14 @@ function AddAgentForm({ address, isEOA, onCreated, initialLabel = "" }: {
   onCreated: (agent: AgentEntry) => void;
   initialLabel?: string;
 }) {
-  const [label, setLabel]       = useState(initialLabel);
-  const [limit, setLimit]       = useState("50");
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState("");
+  const [label,        setLabel]        = useState(initialLabel);
+  const [limit,        setLimit]        = useState("50");
+  const [maxPerTx,     setMaxPerTx]     = useState("");
+  const [velocity,     setVelocity]     = useState("");
+  const [whitelist,    setWhitelist]    = useState("");
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [loading,      setLoading]      = useState(false);
+  const [error,        setError]        = useState("");
 
   const { signTypedDataAsync } = useSignTypedData();
   const { writeContractAsync: writeApprove, data: approveTxHash, error: approveError } = useWriteContract();
@@ -546,9 +551,9 @@ function AddAgentForm({ address, isEOA, onCreated, initialLabel = "" }: {
       start:        now - 60,
       end:          now + 365 * 24 * 60 * 60,
       salt:         salt(),
-      maxPerTx:     BigInt(0),
-      allowedTo:    [],
-      maxTxPerHour: 0,
+      maxPerTx:     maxPerTx ? parseUnits(maxPerTx, 6) : BigInt(0),
+      allowedTo:    whitelist ? whitelist.split(",").map(a => a.trim()).filter(a => a.startsWith("0x")) as `0x${string}`[] : [],
+      maxTxPerHour: velocity ? parseInt(velocity) : 0,
       parentHash:   "0x0000000000000000000000000000000000000000000000000000000000000000" as `0x${string}`,
     };
 
@@ -639,9 +644,53 @@ function AddAgentForm({ address, isEOA, onCreated, initialLabel = "" }: {
           </div>
         )}
 
+        {/* V5 Advanced controls */}
+        <div className="mb-4">
+          <button
+            type="button"
+            onClick={() => setShowAdvanced(!showAdvanced)}
+            className="text-xs text-white/30 hover:text-white/60 tracking-wider uppercase flex items-center gap-2 transition-colors"
+          >
+            <span>{showAdvanced ? "▾" : "▸"}</span> Advanced Controls
+          </button>
+
+          {showAdvanced && (
+            <div className="mt-3 space-y-3 border border-white/10 p-4">
+              <div>
+                <label className="block text-xs text-white/40 tracking-wider uppercase mb-1">Max Per Tx (USDC)</label>
+                <input
+                  type="number" value={maxPerTx} onChange={e => setMaxPerTx(e.target.value)}
+                  placeholder="No cap"
+                  className="w-full bg-transparent border border-white/20 px-3 py-2 text-sm text-white placeholder-white/20 focus:border-[#F65B1A] focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-white/40 tracking-wider uppercase mb-1">Velocity (max tx/hour)</label>
+                <input
+                  type="number" value={velocity} onChange={e => setVelocity(e.target.value)}
+                  placeholder="Unlimited"
+                  className="w-full bg-transparent border border-white/20 px-3 py-2 text-sm text-white placeholder-white/20 focus:border-[#F65B1A] focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-white/40 tracking-wider uppercase mb-1">Whitelist (comma-separated 0x addresses)</label>
+                <textarea
+                  value={whitelist} onChange={e => setWhitelist(e.target.value)}
+                  placeholder="Any address (leave blank)"
+                  rows={2}
+                  className="w-full bg-transparent border border-white/20 px-3 py-2 text-sm text-white placeholder-white/20 focus:border-[#F65B1A] focus:outline-none resize-none"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Permission summary */}
         <div className="bg-white/4 border border-white/10 p-4 text-xs text-white/50 space-y-1 mb-4">
           <div>Agent spends up to <span className="text-white">${limit}/day</span></div>
+          {maxPerTx && <div>Max per tx: <span className="text-white">${maxPerTx}</span></div>}
+          {velocity && <div>Velocity: <span className="text-white">{velocity}/hr max</span></div>}
+          {whitelist && <div>Whitelist: <span className="text-white">{whitelist.split(",").filter(Boolean).length} address(es)</span></div>}
           <div>Resets every <span className="text-white">24 hours</span></div>
           <div>Expires in <span className="text-white">1 year</span></div>
           <div>PaySpawn fee: <span className="text-[#F65B1A]">Free</span> (zero protocol fees)</div>
@@ -674,6 +723,10 @@ const PAYMENT_SENT_EVENT = parseAbiItem(
   "event PaymentSent(address indexed from, address indexed to, uint256 amount, uint256 fee)"
 );
 
+const PAYMENT_EXECUTED_V5_EVENT = parseAbiItem(
+  "event PaymentExecutedV5(bytes32 indexed credentialHash, address indexed from, address indexed to, uint256 amount, bytes32 memo, uint256 dailyRemaining, uint256 hourlyTxRemaining)"
+);
+
 function TxHistory({ address }: { address: `0x${string}` }) {
   const [txs, setTxs]         = useState<TxEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -683,21 +736,45 @@ function TxHistory({ address }: { address: `0x${string}` }) {
     if (!publicClient || !address) return;
     setLoading(true);
     try {
-      const logs = await publicClient.getLogs({
+      // Query V4 PaymentSent events
+      const v4Logs = await publicClient.getLogs({
         address: CONTRACTS.PAYSPAWN_SPENDER,
         event:   PAYMENT_SENT_EVENT,
         args:    { from: address },
         fromBlock: BigInt(42000000),
         toBlock:   "latest",
-      });
-      const events: TxEvent[] = logs.map(l => ({
+      }).catch(() => []);
+
+      // Query V5.1 PaymentExecutedV5 events
+      const v5Logs = await publicClient.getLogs({
+        address: CONTRACTS.PAYSPAWN_SPENDER_V5,
+        event:   PAYMENT_EXECUTED_V5_EVENT,
+        args:    { from: address },
+        fromBlock: BigInt(42000000),
+        toBlock:   "latest",
+      }).catch(() => []);
+
+      const v4Events: TxEvent[] = v4Logs.map(l => ({
         txHash:      l.transactionHash as `0x${string}`,
         from:        l.args.from as `0x${string}`,
         to:          l.args.to as `0x${string}`,
         amount:      l.args.amount as bigint,
         fee:         l.args.fee as bigint,
         blockNumber: l.blockNumber as bigint,
-      })).reverse();
+      }));
+
+      const v5Events: TxEvent[] = v5Logs.map(l => ({
+        txHash:      l.transactionHash as `0x${string}`,
+        from:        l.args.from as `0x${string}`,
+        to:          l.args.to as `0x${string}`,
+        amount:      l.args.amount as bigint,
+        fee:         BigInt(0),
+        blockNumber: l.blockNumber as bigint,
+        version:     "v5.1" as string,
+      }));
+
+      const events = [...v4Events, ...v5Events]
+        .sort((a, b) => Number(b.blockNumber) - Number(a.blockNumber));
 
       // Fetch block timestamps for top 10
       const enriched = await Promise.all(events.slice(0, 20).map(async (e) => {
@@ -726,7 +803,7 @@ function TxHistory({ address }: { address: `0x${string}` }) {
       <table className="w-full text-xs">
         <thead>
           <tr className="border-b border-white/10">
-            {["Time", "To", "Amount", "Fee", "Tx"].map(h => (
+            {["Time", "To", "Amount", "Fee", "Ver", "Tx"].map(h => (
               <th key={h} className="pb-3 text-left text-white/30 tracking-wider uppercase font-light pr-6">{h}</th>
             ))}
           </tr>
@@ -742,6 +819,11 @@ function TxHistory({ address }: { address: `0x${string}` }) {
               </td>
               <td className="py-3 pr-6 text-white">${fmt(tx.amount)}</td>
               <td className="py-3 pr-6 text-white/40">${fmt(tx.fee)}</td>
+              <td className="py-3 pr-6">
+                <span className={`text-[10px] px-1.5 py-0.5 border ${tx.version === 'v5.1' ? 'border-[#F65B1A]/40 text-[#F65B1A]' : 'border-white/15 text-white/30'}`}>
+                  {tx.version ?? 'V4'}
+                </span>
+              </td>
               <td className="py-3">
                 <a href={`https://basescan.org/tx/${tx.txHash}`} target="_blank" rel="noopener noreferrer"
                   className="text-[#F65B1A] hover:underline">
