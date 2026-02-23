@@ -107,9 +107,11 @@ export async function POST(req: NextRequest) {
       ownerWallet,
       ownerCredential,
       count = 1,
+      agentCount: agentCountAlias = undefined,
       dailyLimitUsdc,
       durationDays = 365,
       labels = [],
+      agentNames = [],
     } = body;
 
     // Validate pool address
@@ -138,7 +140,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "ownerWallet or ownerCredential required" }, { status: 400 });
     }
 
-    const agentCount = Math.min(Number(count), 100); // max 100 agents per call
+    const agentCount = Math.min(Number(agentCountAlias ?? count), 100); // max 100 agents per call
 
     // Generate credentials
     const agents: Array<{
@@ -161,7 +163,7 @@ export async function POST(req: NextRequest) {
 
       const now = Math.floor(Date.now() / 1000);
       agents.push({
-        label:          labels[i] || `agent-${i + 1}`,
+        label:          labels[i] || agentNames[i] || `agent-${i + 1}`,
         credential,
         credentialHash,
         dailyLimitUSD:  (Number(dailyLimitUsdc) / 1e6).toFixed(2),
