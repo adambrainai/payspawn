@@ -583,25 +583,35 @@ export async function POST(request: NextRequest) {
     }
 
     // Handle 402 Payment Required
+    // Support both header-based (our format) and body-based (standard x402 v1: { accepts: [...] })
     const paymentHeader =
       initialResponse.headers.get(X402_HEADERS.PAYMENT_REQUIRED) ||
       initialResponse.headers.get(X402_HEADERS.PAYMENT_REQUIRED_ALT) ||
       initialResponse.headers.get("x-payment") ||
       initialResponse.headers.get("payment");
 
-    if (!paymentHeader) {
-      return NextResponse.json({
-        success: false,
-        error: "Received 402 but no payment requirements in response headers",
-        status: 402,
-      }, { status: 402 });
+    let x402Response: { paymentRequirements: any[] } | null = null;
+
+    if (paymentHeader) {
+      x402Response = parsePaymentRequired(paymentHeader);
     }
 
-    const x402Response = parsePaymentRequired(paymentHeader);
+    // Fallback: parse standard x402 v1 body format ({ x402Version, error, accepts: [...] })
+    if (!x402Response) {
+      try {
+        const body402 = JSON.parse(await initialResponse.clone().text());
+        if (body402.accepts && Array.isArray(body402.accepts)) {
+          x402Response = { paymentRequirements: body402.accepts };
+        } else if (body402.paymentRequirements) {
+          x402Response = { paymentRequirements: body402.paymentRequirements };
+        }
+      } catch { /* ignore parse errors */ }
+    }
+
     if (!x402Response) {
       return NextResponse.json({
         success: false,
-        error: "Failed to parse x402 payment requirements",
+        error: "Received 402 but no payment requirements in response headers or body",
         status: 402,
       }, { status: 402 });
     }
