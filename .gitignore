@@ -8,3 +8,6 @@ dist/
 .next/
 .env.save
 .vercel
+demos/openagentmarket/xmtp-production*.db3*
+demos/openagentmarket/.worker-mnemonic
+demos/openagentmarket/.worker-address
