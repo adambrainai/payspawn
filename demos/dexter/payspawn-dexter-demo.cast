@@ -1,0 +1,3 @@
+{"version":3,"term":{"cols":80,"rows":24},"timestamp":1771867504,"command":"bash demo.sh","env":{"SHELL":"/bin/zsh"}}
+[0.017, "o", "TERM environment variable not set.\r\n"]
+[0.000, "x", "1"]

@@ -13,6 +13,7 @@ import {
 // ============ Contract Addresses (Base Mainnet) ============
 
 const CONTRACTS = {
+  PAYSPAWN_SPENDER_V5: (process.env.PAYSPAWN_SPENDER_V5 || "0xaa8e6815b0E8a3006DEe0c3171Cf9CA165fd862e").trim() as `0x${string}`, // V5.3
   PAYSPAWN_SPENDER_V4: "0x71FF87e48b3A66549FbC6A30214b11C4b4975bda" as `0x${string}`,
   SPEND_PERMISSION_MANAGER: "0xf85210B21cC50302F477BA56686d2019dC9b67Ad" as `0x${string}`,
   USDC: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as `0x${string}`,
@@ -29,7 +30,21 @@ interface SpendPermission {
   start: number;
   end: number;
   salt: string;
-  extraData: string;
+  extraData?: string;
+  // V5 fields
+  maxPerTx?: string;
+  allowedTo?: string[];
+  maxTxPerHour?: number;
+  parentHash?: string;
+}
+
+function isV5Credential(permission: SpendPermission): boolean {
+  return (
+    permission.maxPerTx !== undefined ||
+    permission.allowedTo !== undefined ||
+    permission.maxTxPerHour !== undefined ||
+    permission.parentHash !== undefined
+  );
 }
 
 // ============ ABIs ============
@@ -179,6 +194,46 @@ const USDC_ABI = [
   },
 ] as const;
 
+// V5 ABI — payEOAV5 with on-chain controls
+const PAYSPAWN_V5_ABI = [
+  {
+    name: "payEOAV5",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      {
+        name: "permission",
+        type: "tuple",
+        components: [
+          { name: "account",      type: "address"   },
+          { name: "spender",      type: "address"   },
+          { name: "token",        type: "address"   },
+          { name: "allowance",    type: "uint256"   },
+          { name: "period",       type: "uint48"    },
+          { name: "start",        type: "uint48"    },
+          { name: "end",          type: "uint48"    },
+          { name: "salt",         type: "uint256"   },
+          { name: "maxPerTx",     type: "uint256"   },
+          { name: "allowedTo",    type: "address[]" },
+          { name: "maxTxPerHour", type: "uint8"     },
+          { name: "parentHash",   type: "bytes32"   },
+        ],
+      },
+      { name: "to",     type: "address" },
+      { name: "amount", type: "uint256" },
+      { name: "memo",   type: "bytes32" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "calculateFee",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "amount", type: "uint256" }],
+    outputs: [{ type: "uint256" }],
+  },
+] as const;
+
 // ============ Helpers ============
 
 const RELAYER_PRIVATE_KEY = process.env.RELAYER_PRIVATE_KEY;
@@ -219,10 +274,15 @@ async function checkSpendingLimits(
   const amountWei = parseUnits(amountUSD.toString(), 6);
 
   try {
-    // Get fee from V4
+    // Get fee from correct contract (V5 or V4)
+    const feeContractAddr = isV5Credential(permission) && permission.spender
+      ? permission.spender as `0x${string}`
+      : CONTRACTS.PAYSPAWN_SPENDER_V4;
+    const feeAbi = isV5Credential(permission) ? PAYSPAWN_V5_ABI : PAYSPAWN_SPENDER_ABI;
+
     const fee = await publicClient.readContract({
-      address: CONTRACTS.PAYSPAWN_SPENDER_V4,
-      abi: PAYSPAWN_SPENDER_ABI,
+      address: feeContractAddr,
+      abi: feeAbi,
       functionName: "calculateFee",
       args: [amountWei],
     });
@@ -246,12 +306,13 @@ async function checkSpendingLimits(
     }
 
     if (isEOA) {
-      // EOA: check USDC allowance to V4 (the daily limit is the allowance set at credential creation)
+      // EOA: check USDC allowance to the credential's spender (V4 or V5)
+      const spenderForAllowance = permission.spender as `0x${string}`;
       const usdcAllowance = await publicClient.readContract({
         address: CONTRACTS.USDC,
         abi: USDC_ABI,
         functionName: "allowance",
-        args: [permission.account as `0x${string}`, CONTRACTS.PAYSPAWN_SPENDER_V4],
+        args: [permission.account as `0x${string}`, spenderForAllowance],
       });
 
       if (usdcAllowance < total) {
@@ -332,9 +393,15 @@ async function executePayment(
   const amountWei = parseUnits(amountUSD.toString(), 6);
 
   try {
+    const isV5 = isV5Credential(permission);
+    const feeContractAddr2 = isV5 && permission.spender
+      ? permission.spender as `0x${string}`
+      : CONTRACTS.PAYSPAWN_SPENDER_V4;
+    const feeAbi2 = isV5 ? PAYSPAWN_V5_ABI : PAYSPAWN_SPENDER_ABI;
+
     const fee = await publicClient.readContract({
-      address: CONTRACTS.PAYSPAWN_SPENDER_V4,
-      abi: PAYSPAWN_SPENDER_ABI,
+      address: feeContractAddr2,
+      abi: feeAbi2,
       functionName: "calculateFee",
       args: [amountWei],
     });
@@ -343,17 +410,41 @@ async function executePayment(
     let txHash: `0x${string}`;
 
     if (isEOA) {
-      // EOA path: direct USDC.transferFrom via payEOA()
-      txHash = await walletClient.writeContract({
-        address: CONTRACTS.PAYSPAWN_SPENDER_V4,
-        abi: PAYSPAWN_SPENDER_ABI,
-        functionName: "payEOA",
-        args: [
-          permission.account as `0x${string}`,
-          to as `0x${string}`,
-          amountWei,
-        ],
-      });
+      if (isV5) {
+        // V5 EOA path: payEOAV5(permission, to, amount, memo)
+        const v5Perm = {
+          account:      permission.account as `0x${string}`,
+          spender:      permission.spender as `0x${string}`,
+          token:        permission.token   as `0x${string}`,
+          allowance:    BigInt(permission.allowance),
+          period:       Number(permission.period),
+          start:        Number(permission.start),
+          end:          Number(permission.end),
+          salt:         BigInt(permission.salt),
+          maxPerTx:     BigInt(permission.maxPerTx     ?? 0),
+          allowedTo:    (permission.allowedTo ?? [])   as `0x${string}`[],
+          maxTxPerHour: Number(permission.maxTxPerHour ?? 0),
+          parentHash:   (permission.parentHash ?? "0x0000000000000000000000000000000000000000000000000000000000000000") as `0x${string}`,
+        };
+        txHash = await walletClient.writeContract({
+          address: permission.spender as `0x${string}`,
+          abi: PAYSPAWN_V5_ABI,
+          functionName: "payEOAV5",
+          args: [v5Perm, to as `0x${string}`, amountWei, "0x0000000000000000000000000000000000000000000000000000000000000000" as `0x${string}`],
+        });
+      } else {
+        // V4 EOA path: direct USDC.transferFrom via payEOA()
+        txHash = await walletClient.writeContract({
+          address: CONTRACTS.PAYSPAWN_SPENDER_V4,
+          abi: PAYSPAWN_SPENDER_ABI,
+          functionName: "payEOA",
+          args: [
+            permission.account as `0x${string}`,
+            to as `0x${string}`,
+            amountWei,
+          ],
+        });
+      }
     } else {
       // Smart Wallet path: SpendPermissionManager
       const permissionForContract = formatPermissionForContract(permission);
