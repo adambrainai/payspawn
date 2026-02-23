@@ -19,7 +19,7 @@ import { base } from "viem/chains";
 const CONTRACTS = {
   SPEND_PERMISSION_MANAGER: "0xf85210B21cC50302F477BA56686d2019dC9b67Ad" as `0x${string}`,
   PAYSPAWN_SPENDER:         "0x71FF87e48b3A66549FbC6A30214b11C4b4975bda" as `0x${string}`, // V4 legacy
-  PAYSPAWN_SPENDER_V5:      "0x357b7D5A6529F6aA3b89A276698615D2110ED9E2" as `0x${string}`, // V5 — new default
+  PAYSPAWN_SPENDER_V5:      "0x357b7D5A6529F6aA3b89A276698615D2110ED9E2" as `0x${string}`, // V5.1 — new default
   USDC:                     "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as `0x${string}`,
   NAMES:                    "0xc653c91524B5D72Adb767151d30b606A727be2E4" as `0x${string}`,
 };
@@ -362,13 +362,7 @@ function AgentDetail({ agent, onRevoke, onDelete, onReplace, onPauseToggle }: {
         </div>
       )}
 
-      {/* V4 upgrade nudge */}
-      {!isV5 && active && (
-        <div className="px-6 py-3 border-b border-white/10 bg-white/2 flex items-center justify-between">
-          <span className="text-xs text-white/30">V5 adds per-tx limits, whitelisting, pause controls</span>
-          <button onClick={onReplace} className="text-xs text-[#F65B1A] hover:underline">Upgrade →</button>
-        </div>
-      )}
+
 
       {/* Credential */}
       <div className="px-6 py-5 border-b border-white/10 flex-1">
