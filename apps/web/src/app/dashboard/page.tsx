@@ -18,7 +18,8 @@ import { base } from "viem/chains";
 
 const CONTRACTS = {
   SPEND_PERMISSION_MANAGER: "0xf85210B21cC50302F477BA56686d2019dC9b67Ad" as `0x${string}`,
-  PAYSPAWN_SPENDER:         "0x71FF87e48b3A66549FbC6A30214b11C4b4975bda" as `0x${string}`,
+  PAYSPAWN_SPENDER:         "0x71FF87e48b3A66549FbC6A30214b11C4b4975bda" as `0x${string}`, // V4 legacy
+  PAYSPAWN_SPENDER_V5:      "0xB079417f0122cB4ff7Aa56d6D5AD49E3d0ECA4bE" as `0x${string}`, // V5 — new default
   USDC:                     "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as `0x${string}`,
   NAMES:                    "0xc653c91524B5D72Adb767151d30b606A727be2E4" as `0x${string}`,
 };
@@ -73,10 +74,23 @@ interface AgentEntry {
     account: string; spender: string; token: string;
     allowance: string; period: number; start: number; end: number;
     salt: string; extraData: string;
+    // V5 fields (optional — absent on V4 credentials)
+    maxPerTx?: string;
+    allowedTo?: string[];
+    maxTxPerHour?: number;
+    parentHash?: string;
   };
   isEOA: boolean;
+  credentialVersion: "v4" | "v5";
+  isPaused?: boolean;
   createdAt: number;
   isRevoked: boolean;
+}
+
+/** Detect if a stored permission has V5 fields */
+function isPermissionV5(p: AgentEntry["permission"]): boolean {
+  return p.maxPerTx !== undefined || p.allowedTo !== undefined ||
+         p.maxTxPerHour !== undefined || p.parentHash !== undefined;
 }
 
 interface TxEvent {
@@ -114,6 +128,16 @@ const fmt = (v: bigint) => parseFloat(formatUnits(v, 6)).toFixed(2);
 const salt = () => BigInt(Math.floor(Math.random() * 1e18));
 const uid  = () => Math.random().toString(36).slice(2, 10);
 
+interface PermissionV5 {
+  account: `0x${string}`; spender: `0x${string}`; token: `0x${string}`;
+  allowance: bigint; period: number; start: number; end: number;
+  salt: bigint;
+  maxPerTx: bigint;
+  allowedTo: `0x${string}`[];
+  maxTxPerHour: number;
+  parentHash: `0x${string}`;
+}
+
 function encodeCredential(p: SpendPermission, sig: string): string {
   return Buffer.from(JSON.stringify({
     signature: sig,
@@ -125,12 +149,33 @@ function encodeCredential(p: SpendPermission, sig: string): string {
   })).toString("base64");
 }
 
+function encodeCredentialV5(p: PermissionV5, sig: string): string {
+  return Buffer.from(JSON.stringify({
+    signature: sig,
+    permission: {
+      account: p.account, spender: p.spender, token: p.token,
+      allowance: p.allowance.toString(), period: p.period,
+      start: p.start, end: p.end, salt: p.salt.toString(),
+      maxPerTx: p.maxPerTx.toString(),
+      allowedTo: p.allowedTo,
+      maxTxPerHour: p.maxTxPerHour,
+      parentHash: p.parentHash,
+    },
+  })).toString("base64");
+}
+
 function storageKey(addr: string) { return `payspawn_fleet_${addr.toLowerCase()}`; }
 
 function loadAgents(addr: string): AgentEntry[] {
   if (typeof window === "undefined") return [];
-  try { return JSON.parse(localStorage.getItem(storageKey(addr)) || "[]"); }
-  catch { return []; }
+  try {
+    const raw: AgentEntry[] = JSON.parse(localStorage.getItem(storageKey(addr)) || "[]");
+    // Backfill credentialVersion for entries created before V5
+    return raw.map(a => ({
+      ...a,
+      credentialVersion: a.credentialVersion ?? (isPermissionV5(a.permission) ? "v5" : "v4"),
+    }));
+  } catch { return []; }
 }
 
 function saveAgents(addr: string, agents: AgentEntry[]) {
@@ -197,6 +242,15 @@ function AgentCard({ agent, selected, onClick }: {
       <div className="mt-1 ml-5 flex items-center gap-3 text-xs text-white/25">
         <span>{agent.isEOA ? "EOA" : "Smart Wallet"}</span>
         <span>·</span>
+        <span className={`font-mono px-1 py-0.5 text-[10px] rounded ${
+          (agent.credentialVersion === "v5" || isPermissionV5(agent.permission))
+            ? "bg-[#F65B1A]/15 text-[#F65B1A]"
+            : "bg-white/8 text-white/30"
+        }`}>
+          {(agent.credentialVersion === "v5" || isPermissionV5(agent.permission)) ? "V5" : "V4"}
+        </span>
+        {agent.isPaused && <span className="text-yellow-400">PAUSED</span>}
+        <span>·</span>
         <span>{expired ? "Expired" : agent.isRevoked ? "Revoked" : `Exp ${expiry.toLocaleDateString()}`}</span>
       </div>
     </button>
@@ -205,13 +259,35 @@ function AgentCard({ agent, selected, onClick }: {
 
 // ─── Agent Detail Panel ──────────────────────────────────────────────────────
 
-function AgentDetail({ agent, onRevoke, onDelete, onReplace }: {
-  agent: AgentEntry; onRevoke: () => void; onDelete: () => void; onReplace: () => void;
+function AgentDetail({ agent, onRevoke, onDelete, onReplace, onPauseToggle }: {
+  agent: AgentEntry; onRevoke: () => void; onDelete: () => void;
+  onReplace: () => void; onPauseToggle?: () => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded]     = useState(false);
+  const [pausing, setPausing]       = useState(false);
+  const [pauseError, setPauseError] = useState("");
   const limit  = parseFloat(formatUnits(BigInt(agent.permission.allowance), 6)).toFixed(2);
   const expiry = new Date(agent.permission.end * 1000).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
   const active = !agent.isRevoked && agent.permission.end > Date.now() / 1000;
+  const isV5   = agent.credentialVersion === "v5" || isPermissionV5(agent.permission);
+
+  const handlePause = async () => {
+    setPausing(true); setPauseError("");
+    try {
+      const res = await fetch("/api/pay/pause", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ credential: agent.credential, action: agent.isPaused ? "unpause" : "pause" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      onPauseToggle?.();
+    } catch (e: unknown) {
+      setPauseError(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setPausing(false);
+    }
+  };
 
   return (
     <div className="h-full flex flex-col">
@@ -219,14 +295,23 @@ function AgentDetail({ agent, onRevoke, onDelete, onReplace }: {
       <div className="px-6 py-5 border-b border-white/10">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <StatusDot active={active} />
+            <StatusDot active={active && !agent.isPaused} />
             <h3 className="text-lg font-extralight text-white">{agent.label}</h3>
           </div>
-          <span className={`text-xs px-2 py-1 border ${
-            active ? "border-green-500/40 text-green-400" : "border-white/20 text-white/30"
-          }`}>
-            {agent.isRevoked ? "Revoked" : active ? "Active" : "Expired"}
-          </span>
+          <div className="flex items-center gap-2">
+            {/* Version badge */}
+            <span className={`text-[10px] font-mono px-1.5 py-0.5 border ${
+              isV5 ? "border-[#F65B1A]/40 text-[#F65B1A]" : "border-white/15 text-white/25"
+            }`}>{isV5 ? "V5" : "V4"}</span>
+            {/* Status badge */}
+            <span className={`text-xs px-2 py-1 border ${
+              agent.isPaused    ? "border-yellow-500/40 text-yellow-400" :
+              active            ? "border-green-500/40 text-green-400"   :
+                                  "border-white/20 text-white/30"
+            }`}>
+              {agent.isRevoked ? "Revoked" : agent.isPaused ? "Paused" : active ? "Active" : "Expired"}
+            </span>
+          </div>
         </div>
         <p className="mt-1 text-xs text-white/30 font-mono">
           Created {new Date(agent.createdAt).toLocaleString()}
@@ -246,6 +331,44 @@ function AgentDetail({ agent, onRevoke, onDelete, onReplace }: {
           </div>
         ))}
       </div>
+
+      {/* V5 controls row */}
+      {isV5 && (
+        <div className="grid grid-cols-3 border-b border-white/10 bg-[#F65B1A]/3">
+          <div className="px-6 py-3 border-r border-white/10">
+            <div className="text-[10px] text-white/25 tracking-wider uppercase mb-1">Max Per Tx</div>
+            <div className="text-xs text-white/70">
+              {agent.permission.maxPerTx && BigInt(agent.permission.maxPerTx) > BigInt(0)
+                ? `$${parseFloat(formatUnits(BigInt(agent.permission.maxPerTx), 6)).toFixed(2)}`
+                : <span className="text-white/30">No cap</span>}
+            </div>
+          </div>
+          <div className="px-6 py-3 border-r border-white/10">
+            <div className="text-[10px] text-white/25 tracking-wider uppercase mb-1">Velocity</div>
+            <div className="text-xs text-white/70">
+              {agent.permission.maxTxPerHour
+                ? `${agent.permission.maxTxPerHour}/hr`
+                : <span className="text-white/30">Unlimited</span>}
+            </div>
+          </div>
+          <div className="px-6 py-3">
+            <div className="text-[10px] text-white/25 tracking-wider uppercase mb-1">Whitelist</div>
+            <div className="text-xs text-white/70">
+              {agent.permission.allowedTo?.length
+                ? `${agent.permission.allowedTo.length} addr${agent.permission.allowedTo.length > 1 ? "s" : ""}`
+                : <span className="text-white/30">Any address</span>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* V4 upgrade nudge */}
+      {!isV5 && active && (
+        <div className="px-6 py-3 border-b border-white/10 bg-white/2 flex items-center justify-between">
+          <span className="text-xs text-white/30">V5 adds per-tx limits, whitelisting, pause controls</span>
+          <button onClick={onReplace} className="text-xs text-[#F65B1A] hover:underline">Upgrade →</button>
+        </div>
+      )}
 
       {/* Credential */}
       <div className="px-6 py-5 border-b border-white/10 flex-1">
@@ -283,6 +406,32 @@ await ps.pay('alice.pay', 5.00);`}</pre>
       <div className="px-6 py-4 border-t border-white/10">
         {active ? (
           <>
+            {/* V5: pause/unpause */}
+            {isV5 && (
+              <div className="mb-3">
+                <button
+                  onClick={handlePause}
+                  disabled={pausing}
+                  className={`w-full py-2 text-sm transition-colors ${
+                    agent.isPaused
+                      ? "border border-green-500/30 text-green-400 hover:bg-green-500/10"
+                      : "border border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/10"
+                  } disabled:opacity-40 disabled:cursor-not-allowed`}
+                >
+                  {pausing
+                    ? "Confirming on-chain..."
+                    : agent.isPaused
+                      ? "▶ Resume Agent (unpause on-chain)"
+                      : "⏸ Pause Agent (on-chain)"}
+                </button>
+                {pauseError && <p className="mt-1 text-xs text-red-400">{pauseError}</p>}
+                <p className="mt-1 text-xs text-white/20 text-center">
+                  {agent.isPaused
+                    ? "Credential is paused. No payments can execute until resumed."
+                    : "Instantly blocks all payments. Reversible — credential stays valid."}
+                </p>
+              </div>
+            )}
             <button
               onClick={onRevoke}
               className="w-full py-2 border border-red-500/30 text-red-400 text-sm hover:bg-red-500/10 transition-colors"
@@ -337,25 +486,45 @@ function AddAgentForm({ address, isEOA, onCreated, initialLabel = "" }: {
   // When EOA approval tx confirms, finalize the credential
   useEffect(() => {
     if (isApproveConfirmed && pendingEOAPermission && label) {
-      const cred = encodeCredential(pendingEOAPermission, "EOA");
-      const agent: AgentEntry = {
-        id: uid(), label: label.trim(),
-        credential: cred,
-        permission: {
-          account: pendingEOAPermission.account,
-          spender: pendingEOAPermission.spender,
-          token: pendingEOAPermission.token,
-          allowance: pendingEOAPermission.allowance.toString(),
-          period: pendingEOAPermission.period,
-          start: pendingEOAPermission.start,
-          end: pendingEOAPermission.end,
-          salt: pendingEOAPermission.salt.toString(),
-          extraData: pendingEOAPermission.extraData,
-        },
-        isEOA: true,
-        createdAt: Date.now(),
-        isRevoked: false,
-      };
+      const p = pendingEOAPermission as unknown as PermissionV5 & { extraData?: string };
+      const isV5 = (p as any).maxPerTx !== undefined;
+
+      let cred: string;
+      let agent: AgentEntry;
+
+      if (isV5) {
+        const pv5 = p as PermissionV5;
+        cred = encodeCredentialV5(pv5, "EOA");
+        agent = {
+          id: uid(), label: label.trim(), credential: cred,
+          permission: {
+            account: pv5.account, spender: pv5.spender, token: pv5.token,
+            allowance: pv5.allowance.toString(), period: pv5.period,
+            start: pv5.start, end: pv5.end, salt: pv5.salt.toString(),
+            extraData: "0x",
+            maxPerTx: pv5.maxPerTx.toString(),
+            allowedTo: pv5.allowedTo,
+            maxTxPerHour: pv5.maxTxPerHour,
+            parentHash: pv5.parentHash,
+          },
+          isEOA: true, credentialVersion: "v5",
+          createdAt: Date.now(), isRevoked: false,
+        };
+      } else {
+        cred = encodeCredential(pendingEOAPermission, "EOA");
+        agent = {
+          id: uid(), label: label.trim(), credential: cred,
+          permission: {
+            account: pendingEOAPermission.account, spender: pendingEOAPermission.spender,
+            token: pendingEOAPermission.token, allowance: pendingEOAPermission.allowance.toString(),
+            period: pendingEOAPermission.period, start: pendingEOAPermission.start,
+            end: pendingEOAPermission.end, salt: pendingEOAPermission.salt.toString(),
+            extraData: pendingEOAPermission.extraData,
+          },
+          isEOA: true, credentialVersion: "v4",
+          createdAt: Date.now(), isRevoked: false,
+        };
+      }
       setPendingEOAPermission(null);
       setLoading(false);
       onCreated(agent);
@@ -372,6 +541,24 @@ function AddAgentForm({ address, isEOA, onCreated, initialLabel = "" }: {
     setError(""); setLoading(true);
 
     const now      = Math.floor(Date.now() / 1000);
+
+    // V5 permission — default: no per-tx cap, no whitelist, no velocity limit
+    const permissionV5: PermissionV5 = {
+      account:      address,
+      spender:      CONTRACTS.PAYSPAWN_SPENDER_V5,
+      token:        CONTRACTS.USDC,
+      allowance:    parseUnits(limit, 6),
+      period:       86400,
+      start:        now - 60,
+      end:          now + 365 * 24 * 60 * 60,
+      salt:         salt(),
+      maxPerTx:     BigInt(0),
+      allowedTo:    [],
+      maxTxPerHour: 0,
+      parentHash:   "0x0000000000000000000000000000000000000000000000000000000000000000" as `0x${string}`,
+    };
+
+    // Legacy V4 shape (for SmartWallet SPM path — SPM uses original struct)
     const permission: SpendPermission = {
       account:   address,
       spender:   CONTRACTS.PAYSPAWN_SPENDER,
@@ -380,17 +567,18 @@ function AddAgentForm({ address, isEOA, onCreated, initialLabel = "" }: {
       period:    86400,
       start:     now - 60,
       end:       now + 365 * 24 * 60 * 60,
-      salt:      salt(),
+      salt:      permissionV5.salt,
       extraData: "0x" as `0x${string}`,
     };
 
     try {
       if (isEOA) {
-        setPendingEOAPermission(permission);
+        // EOA: approve V5 contract, store V5 credential
+        setPendingEOAPermission({ ...permissionV5, extraData: "0x" as `0x${string}` } as unknown as SpendPermission);
         await writeApprove({
           address: CONTRACTS.USDC, abi: USDC_ABI,
           functionName: "approve",
-          args: [CONTRACTS.PAYSPAWN_SPENDER, permission.allowance],
+          args: [CONTRACTS.PAYSPAWN_SPENDER_V5, permissionV5.allowance],
         });
       } else {
         const sig = await signTypedDataAsync({ domain: DOMAIN, types: SPM_TYPES, primaryType: "SpendPermission", message: permission });
@@ -403,7 +591,7 @@ function AddAgentForm({ address, isEOA, onCreated, initialLabel = "" }: {
             start: permission.start, end: permission.end,
             salt: permission.salt.toString(), extraData: permission.extraData,
           },
-          isEOA: false, createdAt: Date.now(), isRevoked: false,
+          isEOA: false, credentialVersion: "v4", createdAt: Date.now(), isRevoked: false,
         };
         setLoading(false);
         onCreated(agent);
@@ -715,6 +903,15 @@ export default function MissionControl() {
     setMobileView("list");
   }, [address]);
 
+  const togglePause = useCallback((id: string) => {
+    if (!address) return;
+    setAgents(prev => {
+      const updated = prev.map(a => a.id === id ? { ...a, isPaused: !a.isPaused } : a);
+      saveAgents(address, updated);
+      return updated;
+    });
+  }, [address]);
+
   const [replaceLabel, setReplaceLabel] = useState("");
 
   const activeAgents  = agents.filter(a => !a.isRevoked && a.permission.end > Date.now() / 1000);
@@ -862,7 +1059,8 @@ export default function MissionControl() {
                 <AgentDetail agent={selectedAgent}
                   onRevoke={() => { revokeAgent(selectedAgent.id); setSelected(null); setMobileView("list"); }}
                   onDelete={() => deleteAgent(selectedAgent.id)}
-                  onReplace={() => { setReplaceLabel(selectedAgent.label); setSelected("new"); }} />
+                  onReplace={() => { setReplaceLabel(selectedAgent.label); setSelected("new"); }}
+                  onPauseToggle={() => togglePause(selectedAgent.id)} />
               ) : (
                 /* Desktop empty state */
                 <div className="hidden md:flex h-full flex-col items-center justify-center text-center px-8">
