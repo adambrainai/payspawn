@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac } from "crypto";
 
-const RECEIPT_SIGNING_KEY = process.env.RECEIPT_SIGNING_KEY;
+const RECEIPT_SIGNING_KEY = process.env.RECEIPT_SIGNING_KEY as string | undefined;
 
 export interface PaySpawnReceipt {
   txHash:    string;
@@ -28,7 +28,7 @@ function computeSignature(receipt: Omit<PaySpawnReceipt, "signature">): string {
     timestamp: receipt.timestamp,
     version:   receipt.version,
   });
-  return createHmac("sha256", RECEIPT_SIGNING_KEY).update(payload).digest("hex");
+  return createHmac("sha256", RECEIPT_SIGNING_KEY!).update(payload).digest("hex");
 }
 
 /**

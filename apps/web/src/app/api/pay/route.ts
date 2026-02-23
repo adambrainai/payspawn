@@ -14,7 +14,7 @@ const CONTRACTS = {
 };
 
 const RELAYER_PRIVATE_KEY = process.env.RELAYER_PRIVATE_KEY;
-const RECEIPT_SIGNING_KEY = process.env.RECEIPT_SIGNING_KEY;
+const RECEIPT_SIGNING_KEY = process.env.RECEIPT_SIGNING_KEY as string | undefined;
 
 // V5 ABI — payEOAV5, batchPayEOAV5, pauseCredential, unpauseCredential
 const PAYSPAWN_V5_ABI = [
@@ -371,7 +371,7 @@ function buildSignedReceipt(opts: {
     timestamp: receipt.timestamp,
     version:   receipt.version,
   });
-  receipt.signature = createHmac("sha256", RECEIPT_SIGNING_KEY).update(payload).digest("hex");
+  receipt.signature = createHmac("sha256", RECEIPT_SIGNING_KEY!).update(payload).digest("hex");
   return receipt;
 }
 
