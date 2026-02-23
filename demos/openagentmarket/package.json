@@ -1,0 +1,21 @@
+{
+  "name": "payspawn-openagentmarket-demo",
+  "version": "1.0.0",
+  "description": "PaySpawn x OpenAgentMarket: on-chain credentialed agent payments",
+  "type": "module",
+  "scripts": {
+    "demo": "tsx index.ts",
+    "aave": "tsx aave-demo.ts",
+    "nansen": "tsx nansen-demo.ts"
+  },
+  "dependencies": {
+    "@openagentmarket/nodejs": "^1.5.1",
+    "dotenv": "^16.4.0",
+    "viem": "^2.0.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3",
+    "@types/node": "^20.11.0"
+  }
+}

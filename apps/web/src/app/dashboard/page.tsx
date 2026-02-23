@@ -19,7 +19,8 @@ import { base } from "viem/chains";
 const CONTRACTS = {
   SPEND_PERMISSION_MANAGER: "0xf85210B21cC50302F477BA56686d2019dC9b67Ad" as `0x${string}`,
   PAYSPAWN_SPENDER:         "0x71FF87e48b3A66549FbC6A30214b11C4b4975bda" as `0x${string}`, // V4 legacy
-  PAYSPAWN_SPENDER_V5:      "0x357b7D5A6529F6aA3b89A276698615D2110ED9E2" as `0x${string}`, // V5.1 — new default
+  PAYSPAWN_SPENDER_V5:      "0xaa8e6815b0E8a3006DEe0c3171Cf9CA165fd862e" as `0x${string}`, // V5.3 — current default (fees live)
+  PAYSPAWN_SPENDER_V5_1:    "0x357b7D5A6529F6aA3b89A276698615D2110ED9E2" as `0x${string}`, // V5.1 — legacy (no fee)
   USDC:                     "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as `0x${string}`,
   NAMES:                    "0xc653c91524B5D72Adb767151d30b606A727be2E4" as `0x${string}`,
 };
@@ -303,7 +304,11 @@ function AgentDetail({ agent, onRevoke, onDelete, onReplace, onPauseToggle }: {
             {/* Version badge */}
             <span className={`text-[10px] font-mono px-1.5 py-0.5 border ${
               isV5 ? "border-[#F65B1A]/40 text-[#F65B1A]" : "border-white/15 text-white/25"
-            }`}>{isV5 ? "V5.1" : "V4"}</span>
+            }`}>{isV5
+                  ? (agent.permission.spender?.toLowerCase() === "0xaa8e6815b0e8a3006dee0c3171cf9ca165fd862e"
+                      ? "V5.3" : "V5.1 ↑")
+                  : "V4"
+                }</span>
             {/* Status badge */}
             <span className={`text-xs px-2 py-1 border ${
               agent.isPaused    ? "border-yellow-500/40 text-yellow-400" :
@@ -745,8 +750,17 @@ function TxHistory({ address }: { address: `0x${string}` }) {
         toBlock:   "latest",
       }).catch(() => []);
 
-      // Query V5.1 PaymentExecutedV5 events
-      const v5Logs = await publicClient.getLogs({
+      // Query V5.1 PaymentExecutedV5 events (legacy contract)
+      const v51Logs = await publicClient.getLogs({
+        address: CONTRACTS.PAYSPAWN_SPENDER_V5_1,
+        event:   PAYMENT_EXECUTED_V5_EVENT,
+        args:    { from: address },
+        fromBlock: BigInt(42000000),
+        toBlock:   "latest",
+      }).catch(() => []);
+
+      // Query V5.3 PaymentExecutedV5 events (current contract, fees live)
+      const v53Logs = await publicClient.getLogs({
         address: CONTRACTS.PAYSPAWN_SPENDER_V5,
         event:   PAYMENT_EXECUTED_V5_EVENT,
         args:    { from: address },
@@ -763,15 +777,26 @@ function TxHistory({ address }: { address: `0x${string}` }) {
         blockNumber: l.blockNumber as bigint,
       }));
 
-      const v5Events: TxEvent[] = v5Logs.map(l => ({
-        txHash:      l.transactionHash as `0x${string}`,
-        from:        l.args.from as `0x${string}`,
-        to:          l.args.to as `0x${string}`,
-        amount:      l.args.amount as bigint,
-        fee:         BigInt(0),
-        blockNumber: l.blockNumber as bigint,
-        version:     "v5.1" as string,
-      }));
+      const v5Events: TxEvent[] = [
+        ...v51Logs.map(l => ({
+          txHash:      l.transactionHash as `0x${string}`,
+          from:        l.args.from as `0x${string}`,
+          to:          l.args.to as `0x${string}`,
+          amount:      l.args.amount as bigint,
+          fee:         BigInt(0),
+          blockNumber: l.blockNumber as bigint,
+          version:     "V5.1" as string,
+        })),
+        ...v53Logs.map(l => ({
+          txHash:      l.transactionHash as `0x${string}`,
+          from:        l.args.from as `0x${string}`,
+          to:          l.args.to as `0x${string}`,
+          amount:      l.args.amount as bigint,
+          fee:         (l.args as any).fee ?? BigInt(0),
+          blockNumber: l.blockNumber as bigint,
+          version:     "V5.3" as string,
+        })),
+      ];
 
       const events = [...v4Events, ...v5Events]
         .sort((a, b) => Number(b.blockNumber) - Number(a.blockNumber));
