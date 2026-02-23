@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac } from "crypto";
+import { publicClient } from "@/lib/rpc";
 
 const RECEIPT_SIGNING_KEY = process.env.RECEIPT_SIGNING_KEY as string | undefined;
 
@@ -101,10 +102,32 @@ export async function GET(request: NextRequest) {
 
     const valid = providedSig === expectedSig;
 
+    // L-2: Optional on-chain verification — confirm tx exists and block timestamp matches
+    let onChainVerified: boolean | null = null;
+    if (valid && receipt.txHash && receipt.txHash.startsWith("0x")) {
+      try {
+        const tx = await publicClient.getTransactionReceipt({
+          hash: receipt.txHash as `0x${string}`,
+        });
+        if (tx) {
+          const block = await publicClient.getBlock({ blockNumber: tx.blockNumber });
+          const blockTs = Number(block.timestamp);
+          // Allow 60s drift between block time and receipt timestamp
+          onChainVerified = Math.abs(blockTs - receipt.timestamp) < 60;
+        } else {
+          onChainVerified = false;
+        }
+      } catch {
+        onChainVerified = null; // RPC error — don't fail the check
+      }
+    }
+
     return NextResponse.json({
       valid,
+      onChainVerified,
       receipt,
       ...(valid ? {} : { reason: "Signature mismatch — receipt may have been tampered with" }),
+      ...(!valid ? {} : onChainVerified === false ? { warning: "TX not found on-chain — treat with caution" } : {}),
     });
   } catch (error: any) {
     console.error("Receipt verify error:", error);
@@ -158,10 +181,32 @@ export async function POST(request: NextRequest) {
 
     const valid = providedSig === expectedSig;
 
+    // L-2: Optional on-chain verification — confirm tx exists and block timestamp matches
+    let onChainVerified: boolean | null = null;
+    if (valid && receipt.txHash && receipt.txHash.startsWith("0x")) {
+      try {
+        const tx = await publicClient.getTransactionReceipt({
+          hash: receipt.txHash as `0x${string}`,
+        });
+        if (tx) {
+          const block = await publicClient.getBlock({ blockNumber: tx.blockNumber });
+          const blockTs = Number(block.timestamp);
+          // Allow 60s drift between block time and receipt timestamp
+          onChainVerified = Math.abs(blockTs - receipt.timestamp) < 60;
+        } else {
+          onChainVerified = false;
+        }
+      } catch {
+        onChainVerified = null; // RPC error — don't fail the check
+      }
+    }
+
     return NextResponse.json({
       valid,
+      onChainVerified,
       receipt,
       ...(valid ? {} : { reason: "Signature mismatch — receipt may have been tampered with" }),
+      ...(!valid ? {} : onChainVerified === false ? { warning: "TX not found on-chain — treat with caution" } : {}),
     });
   } catch (error: any) {
     console.error("Receipt verify error:", error);

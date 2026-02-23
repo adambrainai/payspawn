@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createWalletClient, createPublicClient, http, parseAbi, isAddress, keccak256, encodeAbiParameters, parseAbiParameters } from "viem";
+import { computeCredentialHashV4, decodeCredential as sharedDecodeCredential } from "@/lib/credential";
+import { createWalletClient, createPublicClient, http, parseAbi, isAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { base } from "viem/chains";
 
@@ -15,33 +16,9 @@ const POOL_ABI = parseAbi([
   "function perAgentDailyLimit() view returns (uint256)",
 ]);
 
-function decodeCredential(credential: string) {
-  try {
-    return JSON.parse(Buffer.from(credential, "base64").toString("utf-8"));
-  } catch {
-    return null;
-  }
-}
+// Using sharedDecodeCredential from lib/credential.ts
 
-function computeCredentialHash(permission: any): `0x${string}` {
-  // keccak256(abi.encode(permission struct fields))
-  return keccak256(
-    encodeAbiParameters(
-      parseAbiParameters("address,address,address,uint160,uint48,uint48,uint48,uint256,bytes"),
-      [
-        permission.account as `0x${string}`,
-        permission.spender as `0x${string}`,
-        permission.token   as `0x${string}`,
-        BigInt(permission.allowance),
-        Number(permission.period),
-        Number(permission.start),
-        Number(permission.end),
-        BigInt(permission.salt),
-        permission.extraData as `0x${string}`,
-      ]
-    )
-  );
-}
+// Using shared computeCredentialHashV4 from lib/credential.ts (M-6: no duplication)
 
 /**
  * POST /api/pool/pay
@@ -93,7 +70,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Decode credential
-    const parsed = decodeCredential(credential);
+    const parsed = sharedDecodeCredential(credential);
     if (!parsed) {
       return NextResponse.json({ error: "Invalid credential" }, { status: 400 });
     }
@@ -114,7 +91,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Compute credentialHash
-    const credentialHash = computeCredentialHash(parsed.permission);
+    const credentialHash = computeCredentialHashV4(parsed.permission as any);
     const amountBigInt = BigInt(amount);
 
     const publicClient = createPublicClient({

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createPublicClient, parseUnits, formatUnits, isAddress, http, encodeAbiParameters, keccak256 } from "viem";
+import { validateAmount } from "@/lib/credential";
+import { createPublicClient, fallback, parseUnits, formatUnits, isAddress, http, encodeAbiParameters, keccak256 } from "viem";
 import { createHmac } from "crypto";
 
 import { publicClient, writeContractWithRetry } from "@/lib/rpc";
@@ -205,15 +206,21 @@ const USDC_ABI = [
   },
 ] as const;
 
-// ENS resolution
+// ENS resolution — multi-RPC with fallback (M-4: no single point of failure)
+const ETH_MAINNET = {
+  id: 1,
+  name: 'Ethereum',
+  nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+  rpcUrls: { default: { http: ['https://eth.llamarpc.com'] } },
+} as const;
+
 const mainnetClient = createPublicClient({
-  chain: { 
-    id: 1, 
-    name: 'Ethereum', 
-    nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 }, 
-    rpcUrls: { default: { http: ['https://eth.llamarpc.com'] } } 
-  },
-  transport: http(),
+  chain: ETH_MAINNET,
+  transport: fallback([
+    http('https://eth.llamarpc.com'),
+    http('https://ethereum-rpc.publicnode.com'),
+    http('https://1rpc.io/eth'),
+  ], { rank: false }),
 });
 
 // PaySpawn Names contract on Base
@@ -433,11 +440,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (amount <= 0) {
-      return NextResponse.json(
-        { error: "Amount must be greater than 0" },
-        { status: 400 }
-      );
+    const amountError = validateAmount(amount);
+    if (amountError) {
+      return NextResponse.json({ error: amountError }, { status: 400 });
     }
 
     // Decode credential
@@ -547,7 +552,9 @@ export async function POST(request: NextRequest) {
         args: [permV5, recipient.address as `0x${string}`, amountWei, memoBytes32],
       });
     } else if (isEOACredential) {
-      // ── V4 EOA path ────────────────────────────────────────────────────────
+      // ── V4 EOA path (DEPRECATED — use V5.1 credentials) ───────────────────
+      // V4's payEOA has no access control. New credentials should use V5.1.
+      console.warn("[PaySpawn] V4 EOA path used — credential should be upgraded to V5.1");
       txHash = await writeContractWithRetry({
         address: CONTRACTS.PAYSPAWN_SPENDER_V4,
         abi: PAYSPAWN_SPENDER_ABI,
