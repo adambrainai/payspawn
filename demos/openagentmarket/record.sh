@@ -41,3 +41,10 @@ echo "📁 Files:"
 ls -lh "$CAST_FILE" "$GIF_FILE"
 echo ""
 echo "Share: demos/openagentmarket/$GIF_FILE"
+# Copy to iCloud Brain for easy access
+BRAIN="$HOME/Library/Mobile Documents/com~apple~CloudDocs/Adam's Brain"
+mkdir -p "$BRAIN/brain/recordings"
+cp "$GIF_FILE"  "$BRAIN/brain/recordings/$(basename $GIF_FILE .gif)-$(date +%Y-%m-%d).gif"
+cp "$CAST_FILE" "$BRAIN/brain/recordings/$(basename $CAST_FILE .cast)-$(date +%Y-%m-%d).cast"
+echo "☁️  Copied to iCloud: Adam's Brain/brain/recordings/"
+
