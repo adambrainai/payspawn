@@ -7,7 +7,8 @@
     "worker": "tsx worker.ts",
     "hirer": "tsx hirer.ts",
     "gen-credential": "tsx gen-credential.ts",
-    "probe": "tsx probe.ts"
+    "probe": "tsx probe.ts",
+    "hire": "tsx hire-live-agent.ts"
   },
   "dependencies": {
     "@openagentmarket/nodejs": "^1.5.1",

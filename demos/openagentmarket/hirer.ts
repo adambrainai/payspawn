@@ -14,7 +14,7 @@ const PAYSPAWN_API = process.env.PAYSPAWN_API || "https://payspawn.ai/api";
 
 // Echo's V5.1 credential (from adam.pay, $25/day, any address)
 const ECHO_CREDENTIAL = process.env.PAYSPAWN_CREDENTIAL
-  || "eyJzaWduYXR1cmUiOiJFT0EiLCJwZXJtaXNzaW9uIjp7ImFjY291bnQiOiIweDRlQjFiOERkNmVjY0JFNGZFNTljMGMyNWVhQWNGNjU2NEI1ZTA0ODIiLCJzcGVuZGVyIjoiMHgzNTdiN0Q1QTY1MjlGNmFBM2I4OUEyNzY2OTg2MTVEMjExMEVEOUUyIiwidG9rZW4iOiIweDgzMzU4OWZDRDZlRGI2RTA4ZjRjN0MzMkQ0ZjcxYjU0YmRBMDI5MTMiLCJhbGxvd2FuY2UiOiIyNTAwMDAwMCIsInBlcmlvZCI6ODY0MDAsInN0YXJ0IjoxNzcxODYxNDUxLCJlbmQiOjE4MDMzOTc1MTEsInNhbHQiOiIxMDkxNDg4NDMzMTAwMzIzODQiLCJtYXhQZXJUeCI6IjAiLCJhbGxvd2VkVG8iOltdLCJtYXhUeFBlckhvdXIiOjAsInBhcmVudEhhc2giOiIweDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAifX0=";
+  || "eyJzaWduYXR1cmUiOiJFT0EiLCJwZXJtaXNzaW9uIjp7ImFjY291bnQiOiIweDRlQjFiOERkNmVjY0JFNGZFNTljMGMyNWVhQWNGNjU2NEI1ZTA0ODIiLCJzcGVuZGVyIjoiMHhhYThlNjgxNWIwRThhMzAwNkRFZTBjMzE3MUNmOUNBMTY1ZmQ4NjJlIiwidG9rZW4iOiIweDgzMzU4OWZDRDZlRGI2RTA4ZjRjN0MzMkQ0ZjcxYjU0YmRBMDI5MTMiLCJhbGxvd2FuY2UiOiIxMDAwMDAwMCIsInBlcmlvZCI6ODY0MDAsInN0YXJ0IjoxNzcxODYzNDA5LCJlbmQiOjE4MDMzOTk0NjksInNhbHQiOiI3ODYzODU4ODE5MjMwNDAwMDAiLCJtYXhQZXJUeCI6IjAiLCJhbGxvd2VkVG8iOltdLCJtYXhUeFBlckhvdXIiOjAsInBhcmVudEhhc2giOiIweDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAifX0="; // V5.3
 
 async function payWithPaySpawn(
   to: string,
@@ -66,7 +66,7 @@ async function main() {
   // Create hirer wallet
   const hirerWallet = Wallet.createRandom();
   console.log(`👤 Hirer wallet:  ${hirerWallet.address} (no USDC — pays via credential)`);
-  console.log(`💳 Credential:    Echo (V5.1, $25/day, adam.pay)`);
+  console.log(`💳 Credential:    Echo (V5.3, $10/day, adam.pay)`);
   console.log(`🤖 Worker:        ${workerAddress}\n`);
 
   console.log("🔌 Connecting to XMTP...");
@@ -124,7 +124,7 @@ async function main() {
     console.log(`\n   PaySpawn answers all three.\n`);
 
     // Step 2: Pay via PaySpawn
-    console.log("━━━ STEP 3: Pay via PaySpawn V5.1 credential ━━━");
+    console.log("━━━ STEP 3: Pay via PaySpawn V5.3 credential ━━━");
     const payment = await payWithPaySpawn(recipient, amount, "aave_best_yield query");
 
     // Step 3: Retry with payment proof + PaySpawn receipt
@@ -163,7 +163,7 @@ async function main() {
   1. Agent-to-agent communication — via XMTP (OpenAgentMarket)
   2. Worker demanded payment    — $0.005 USDC per query
   3. Hirer paid via PaySpawn    — credential from adam.pay
-  4. Payment enforced on-chain  — V5.1 contract on Base
+  4. Payment enforced on-chain  — V5.3 contract on Base ($0.005 fee)
   5. Worker verified receipt    — cryptographic proof, not just txHash
   6. Task completed             — Aave yield data + unsigned supply tx
 
