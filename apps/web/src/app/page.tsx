@@ -1,5 +1,6 @@
 import Link from "next/link";
 import HeroNeuralNet from "@/components/HeroNeuralNet";
+import NpmInstall from "@/components/NpmInstall";
 
 export default function Home() {
   return (
@@ -50,6 +51,9 @@ export default function Home() {
               Why We Built This
             </Link>
           </div>
+
+          <div className="mt-6 pointer-events-auto">
+            <NpmInstall /></div>
         </div>
 
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10">
@@ -296,8 +300,8 @@ export default function Home() {
 `}<span className="text-white/40">{"// pay a .pay name"}</span>{`
 `}<span className="text-purple-400">await</span> <span className="text-white">ps</span><span className="text-white/50">.</span><span className="text-blue-400">pay</span><span className="text-white/50">(</span><span className="text-[#F65B1A]">&apos;alice.pay&apos;</span><span className="text-white/50">,</span> <span className="text-cyan-400">5.00</span><span className="text-white/50">)</span>{`
 
-`}<span className="text-white/40">{"// pay an x402 API"}</span>{`
-`}<span className="text-purple-400">await</span> <span className="text-white">ps</span><span className="text-white/50">.</span><span className="text-blue-400">x402</span><span className="text-white/50">(</span><span className="text-[#F65B1A]">&apos;https://api.example.com/data&apos;</span><span className="text-white/50">)</span>
+`}<span className="text-white/40">{"// call any x402 API — payment handled automatically"}</span>{`
+`}<span className="text-purple-400">await</span> <span className="text-white">ps</span><span className="text-white/50">.</span><span className="text-blue-400">fetch</span><span className="text-white/50">(</span><span className="text-[#F65B1A]">&apos;https://api.example.com/data&apos;</span><span className="text-white/50">)</span>
               </pre>
             </div>
           </div>
