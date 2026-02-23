@@ -19,7 +19,7 @@ import { base } from "viem/chains";
 const CONTRACTS = {
   SPEND_PERMISSION_MANAGER: "0xf85210B21cC50302F477BA56686d2019dC9b67Ad" as `0x${string}`,
   PAYSPAWN_SPENDER:         "0x71FF87e48b3A66549FbC6A30214b11C4b4975bda" as `0x${string}`, // V4 legacy
-  PAYSPAWN_SPENDER_V5:      "0xB079417f0122cB4ff7Aa56d6D5AD49E3d0ECA4bE" as `0x${string}`, // V5 — new default
+  PAYSPAWN_SPENDER_V5:      "0x357b7D5A6529F6aA3b89A276698615D2110ED9E2" as `0x${string}`, // V5 — new default
   USDC:                     "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as `0x${string}`,
   NAMES:                    "0xc653c91524B5D72Adb767151d30b606A727be2E4" as `0x${string}`,
 };
@@ -948,6 +948,18 @@ export default function MissionControl() {
         </div>
       ) : (
         <div className="max-w-[1600px] mx-auto px-6 pt-20">
+
+          {/* ── Security Notice: revoke V4 approvals ── */}
+          <div className="mt-4 mb-2 border border-yellow-500/40 bg-yellow-500/5 px-4 py-3 text-xs text-yellow-300/80 flex items-start gap-3">
+            <span className="text-yellow-400 shrink-0 mt-0.5">⚠</span>
+            <span>
+              <strong className="text-yellow-300">Action required:</strong> If you created agents before today, revoke your USDC approval to the old V4 contract{" "}
+              (<a href="https://basescan.org/address/0x71FF87e48b3A66549FbC6A30214b11C4b4975bda#writeContract" target="_blank" rel="noopener noreferrer" className="underline hover:text-yellow-200">0x71FF...bda</a>){" "}
+              and old V5 contract{" "}
+              (<a href="https://basescan.org/address/0xB079417f0122cB4ff7Aa56d6D5AD49E3d0ECA4bE#writeContract" target="_blank" rel="noopener noreferrer" className="underline hover:text-yellow-200">0xB079...bE</a>){" "}
+              using the USDC contract <em>approve(spender, 0)</em> function. New agents use the fixed contract automatically.
+            </span>
+          </div>
 
           {/* ── Wallet Header ── */}
           <div className="border-b border-white/10 py-5">

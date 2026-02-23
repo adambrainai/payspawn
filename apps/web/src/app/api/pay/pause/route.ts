@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { writeContractWithRetry } from "@/lib/rpc";
 
-const PAYSPAWN_SPENDER_V5 = (process.env.PAYSPAWN_SPENDER_V5 || "") as `0x${string}`;
+const PAYSPAWN_SPENDER_V5 = (process.env.PAYSPAWN_SPENDER_V5 || "").trim() as `0x${string}`;
 
 const PAUSE_ABI = [
   {

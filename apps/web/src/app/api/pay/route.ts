@@ -6,7 +6,7 @@ import { publicClient, writeContractWithRetry } from "@/lib/rpc";
 
 // Contract addresses
 const CONTRACTS = {
-  PAYSPAWN_SPENDER_V5: (process.env.PAYSPAWN_SPENDER_V5 || "") as `0x${string}`, // V5 - per-tx limits, whitelist, pause, memo
+  PAYSPAWN_SPENDER_V5: (process.env.PAYSPAWN_SPENDER_V5 || "").trim() as `0x${string}`, // V5 - per-tx limits, whitelist, pause, memo
   PAYSPAWN_SPENDER_V4: "0x71FF87e48b3A66549FbC6A30214b11C4b4975bda" as `0x${string}`, // V4 - dual path (smart wallet + EOA direct)
   PAYSPAWN_SPENDER_V3: "0x0B31146b3d8F17af874dfF03E783336b20577E04" as `0x${string}`, // V3 - legacy
   SPEND_PERMISSION_MANAGER: "0xf85210B21cC50302F477BA56686d2019dC9b67Ad" as `0x${string}`,
