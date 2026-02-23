@@ -496,8 +496,9 @@ export async function POST(request: NextRequest) {
     const spenderAddress = permission.spender as `0x${string}`;
 
     // Fee (V5 fees are zero, but still check the contract)
-    const feeContractAddr = isV5 && CONTRACTS.PAYSPAWN_SPENDER_V5
-      ? CONTRACTS.PAYSPAWN_SPENDER_V5
+    // Use credential's own spender for fee lookup (V5.1 returns 0, V5.3 returns $0.005)
+    const feeContractAddr = isV5 && permission.spender
+      ? (permission.spender as string).trim() as `0x${string}`
       : (isEOACredential ? CONTRACTS.PAYSPAWN_SPENDER_V4 : spenderAddress);
 
     const fee = await publicClient.readContract({
@@ -542,11 +543,13 @@ export async function POST(request: NextRequest) {
 
     let txHash: `0x${string}`;
 
-    if (isV5 && CONTRACTS.PAYSPAWN_SPENDER_V5) {
-      // ── V5 EOA path ────────────────────────────────────────────────────────
+    if (isV5 && permission.spender) {
+      // ── V5 EOA path — use credential's own spender address ─────────────────
+      // Routes to V5.1 or V5.3 based on which contract the user approved
+      const spenderAddr = (permission.spender as string).trim() as `0x${string}`;
       const permV5 = formatPermissionV5ForContract(permission);
       txHash = await writeContractWithRetry({
-        address: CONTRACTS.PAYSPAWN_SPENDER_V5,
+        address: spenderAddr,
         abi: PAYSPAWN_V5_ABI,
         functionName: "payEOAV5",
         args: [permV5, recipient.address as `0x${string}`, amountWei, memoBytes32],

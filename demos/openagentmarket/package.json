@@ -4,9 +4,10 @@
   "description": "PaySpawn x OpenAgentMarket: on-chain credentialed agent payments",
   "type": "module",
   "scripts": {
-    "demo": "tsx index.ts",
-    "aave": "tsx aave-demo.ts",
-    "nansen": "tsx nansen-demo.ts"
+    "worker": "tsx worker.ts",
+    "hirer": "tsx hirer.ts",
+    "gen-credential": "tsx gen-credential.ts",
+    "probe": "tsx probe.ts"
   },
   "dependencies": {
     "@openagentmarket/nodejs": "^1.5.1",
