@@ -18,6 +18,39 @@ const FEE_COLLECTOR = "0xcb3216d1DFf5d648849c784581c4934ea8f9b7b2";
 const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 const PRICE_USDC_ATOMIC = "5000"; // $0.005 in USDC (6 decimals)
 const PRICE_USD = 0.005;
+const PAYMENT_REQUEST_HEADERS =
+  "content-type, authorization, x-payment, payment-signature, x-payment-signature, x-payment-txhash";
+const PAYMENT_RESPONSE_HEADERS =
+  "x-payment-required, payment-required, x-price-usd, x-pay-to, x-network, x-payment-verified, x-txhash";
+const TX_HASH_PATTERN = /^0x[a-fA-F0-9]{64}$/;
+
+function getCorsHeaders(request: NextRequest): HeadersInit {
+  return {
+    "Access-Control-Allow-Origin": request.headers.get("origin") || "*",
+    "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+    "Access-Control-Allow-Headers": PAYMENT_REQUEST_HEADERS,
+    "Access-Control-Expose-Headers": PAYMENT_RESPONSE_HEADERS,
+    "Vary": "Origin, Access-Control-Request-Method, Access-Control-Request-Headers",
+  };
+}
+
+function getPaymentChallengeHeaders(request: NextRequest, encoded: string): HeadersInit {
+  return {
+    ...getCorsHeaders(request),
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "x-payment-required": encoded,
+    "payment-required": encoded,
+    "X-Price-USD": PRICE_USD.toString(),
+    "X-Pay-To": FEE_COLLECTOR,
+    "X-Network": "base",
+  };
+}
+
+function buildResourceUrl(request: NextRequest): string {
+  const url = new URL(request.url);
+  return `${url.origin}${url.pathname}`;
+}
 
 /**
  * Build a compliant x402 PAYMENT-REQUIRED header (exact scheme, Base, USDC)
@@ -48,28 +81,24 @@ function buildPaymentRequired(resource: string): string {
 
 /**
  * Verify a payment proof header.
- * Accepts either:
+ * Accepts recognized proof shapes only:
  *   - PaySpawn proof (base64 JSON with x_payspawn.txHash)
- *   - Standard x402 PAYMENT-SIGNATURE (base64 JSON with payload.txHash or x-tx-hash)
+ *   - Standard x402 PAYMENT-SIGNATURE (base64 JSON with payload.txHash, x-tx-hash, or txHash)
  */
 function verifyPayment(paymentHeader: string): { valid: boolean; txHash?: string } {
   try {
     const decoded = JSON.parse(Buffer.from(paymentHeader, "base64").toString("utf-8"));
+    const txHash =
+      decoded.x_payspawn?.txHash ||
+      decoded.payload?.txHash ||
+      decoded["x-tx-hash"] ||
+      decoded.txHash;
 
-    // PaySpawn extension
-    if (decoded.x_payspawn?.txHash) {
-      return { valid: true, txHash: decoded.x_payspawn.txHash };
+    if (typeof txHash === "string" && TX_HASH_PATTERN.test(txHash)) {
+      return { valid: true, txHash };
     }
-    // Standard x402 signature
-    if (decoded.payload?.txHash) {
-      return { valid: true, txHash: decoded.payload.txHash };
-    }
-    // Alternate: txHash at root
-    if (decoded.txHash) {
-      return { valid: true, txHash: decoded.txHash };
-    }
-    // Any payment proof we can't fully verify — accept optimistically for demo
-    return { valid: true, txHash: "pending" };
+
+    return { valid: false };
   } catch {
     return { valid: false };
   }
@@ -90,7 +119,7 @@ export async function GET(request: NextRequest) {
 
   // No payment → 402
   if (!paymentHeader) {
-    const resource = new URL(request.url).pathname;
+    const resource = buildResourceUrl(request);
     const encoded = buildPaymentRequired(resource);
 
     return new NextResponse(
@@ -105,14 +134,7 @@ export async function GET(request: NextRequest) {
       }),
       {
         status: 402,
-        headers: {
-          "Content-Type": "application/json",
-          "x-payment-required": encoded,
-          "payment-required": encoded,
-          "X-Price-USD": PRICE_USD.toString(),
-          "X-Pay-To": FEE_COLLECTOR,
-          "X-Network": "base",
-        },
+        headers: getPaymentChallengeHeaders(request, encoded),
       }
     );
   }
@@ -121,9 +143,17 @@ export async function GET(request: NextRequest) {
   const { valid, txHash } = verifyPayment(paymentHeader);
 
   if (!valid) {
-    return NextResponse.json(
-      { error: "Invalid payment proof. Retry with a valid PAYMENT-SIGNATURE." },
-      { status: 402 }
+    const encoded = buildPaymentRequired(buildResourceUrl(request));
+
+    return new NextResponse(
+      JSON.stringify({
+        error: "Invalid payment proof. Retry with a valid PAYMENT-SIGNATURE.",
+        x402: true,
+      }),
+      {
+        status: 402,
+        headers: getPaymentChallengeHeaders(request, encoded),
+      }
     );
   }
 
@@ -173,6 +203,8 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json(data, {
     headers: {
+      ...getCorsHeaders(request),
+      "Cache-Control": "no-store",
       "X-Payment-Verified": "true",
       "X-TxHash": txHash || "",
     },
@@ -181,15 +213,21 @@ export async function GET(request: NextRequest) {
 
 export async function HEAD(request: NextRequest) {
   // Return 402 for HEAD requests — lets x402 clients discover pricing
-  const resource = new URL(request.url).pathname;
+  const resource = buildResourceUrl(request);
   const encoded = buildPaymentRequired(resource);
 
   return new NextResponse(null, {
     status: 402,
+    headers: getPaymentChallengeHeaders(request, encoded),
+  });
+}
+
+export async function OPTIONS(request: NextRequest) {
+  return new NextResponse(null, {
+    status: 204,
     headers: {
-      "x-payment-required": encoded,
-      "payment-required": encoded,
-      "X-Price-USD": PRICE_USD.toString(),
+      ...getCorsHeaders(request),
+      "Cache-Control": "no-store",
     },
   });
 }
